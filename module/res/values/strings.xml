@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Hyper自动任务增强</string>
+    <string name="xposed_desc">为HyperOS自动任务增加多项功能</string>
+    <string-array name="xposed_scope">
+        <item>com.miui.securitycenter</item>
+    </string-array>
+</resources>

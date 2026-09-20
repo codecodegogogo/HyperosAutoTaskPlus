@@ -1,0 +1,26 @@
+/# ---- 构建产物 ----
+build/out/
+module/build/
+
+# ---- 签名密钥（私钥，不上传；第一次构建会自动重新生成）----
+build/*.p12
+build/*.jks
+build/*.keystore
+
+# ---- 反编译 / 分析用的原始素材（安全服务 APK 及其反编译输出，体积大且不属于本项目）----
+/*.apk
+jadx_out/
+smali_out/
+out_res/
+
+# ---- build/libs 的重复拷贝，构建脚本只用 build/libs ----
+module/libs/
+
+# ---- IDE / 系统文件 ----
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+*.log
+*.apk
