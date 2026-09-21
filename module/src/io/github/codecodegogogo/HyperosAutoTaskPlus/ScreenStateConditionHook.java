@@ -1,4 +1,4 @@
-package io.github.hyperosauto.unlockapp;
+package io.github.codecodegogogo.HyperosAutoTaskPlus;
 
 import android.app.AndroidAppHelper;
 import android.content.Context;

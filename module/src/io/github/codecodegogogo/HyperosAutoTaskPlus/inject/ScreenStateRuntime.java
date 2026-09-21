@@ -1,4 +1,4 @@
-package io.github.hyperosauto.unlockapp.inject;
+package io.github.codecodegogogo.HyperosAutoTaskPlus.inject;
 
 import android.app.AlarmManager;
 import android.content.BroadcastReceiver;

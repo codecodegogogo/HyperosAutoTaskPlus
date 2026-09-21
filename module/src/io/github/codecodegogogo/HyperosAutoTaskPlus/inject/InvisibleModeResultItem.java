@@ -1,8 +1,8 @@
-package io.github.hyperosauto.unlockapp.inject;
+package io.github.codecodegogogo.HyperosAutoTaskPlus.inject;
 
 import com.miui.autotask.taskitem.SwitchTypeItem;
 
-import io.github.hyperosauto.unlockapp.FirstAppKeys;
+import io.github.codecodegogogo.HyperosAutoTaskPlus.FirstAppKeys;
 
 /**
  * 「隐身模式」结果项：任务触发时开启/关闭权限中心的隐身模式，

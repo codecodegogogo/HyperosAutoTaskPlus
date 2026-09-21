@@ -1,4 +1,4 @@
-package io.github.hyperosauto.unlockapp;
+package io.github.codecodegogogo.HyperosAutoTaskPlus;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XposedBridge;
@@ -55,6 +55,13 @@ public class MainHook implements IXposedHookLoadPackage {
             ScreenStateConditionHook.install(lpparam);
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": 「屏幕状态」条件 hook 失败");
+            XposedBridge.log(t);
+        }
+
+        try {
+            ExitConditionHook.install(lpparam);
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": 「自定义退出条件」hook 失败");
             XposedBridge.log(t);
         }
     }

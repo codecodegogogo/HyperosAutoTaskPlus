@@ -1,4 +1,4 @@
-package io.github.hyperosauto.unlockapp;
+package io.github.codecodegogogo.HyperosAutoTaskPlus;
 
 /**
  * 模块自定义条件项的 key。安全中心用 key 作为持久化时的 condition_result_key，

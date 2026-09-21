@@ -1,4 +1,4 @@
-package io.github.hyperosauto.unlockapp.inject;
+package io.github.codecodegogogo.HyperosAutoTaskPlus.inject;
 
 import android.content.Context;
 import android.content.DialogInterface;

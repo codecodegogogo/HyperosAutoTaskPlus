@@ -1,4 +1,4 @@
-package io.github.hyperosauto.unlockapp.inject;
+package io.github.codecodegogogo.HyperosAutoTaskPlus.inject;
 
 import android.app.ActivityManager;
 import android.content.Context;
@@ -20,7 +20,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-import io.github.hyperosauto.unlockapp.FirstAppKeys;
+import io.github.codecodegogogo.HyperosAutoTaskPlus.FirstAppKeys;
 
 /**
  * 「首次启动 / 首次离开」条件的运行时：跟踪应用进程是否在内存中，

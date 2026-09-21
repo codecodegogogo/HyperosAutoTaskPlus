@@ -1,8 +1,8 @@
-package io.github.hyperosauto.unlockapp.inject;
+package io.github.codecodegogogo.HyperosAutoTaskPlus.inject;
 
 import com.miui.autotask.taskitem.TaskItem;
 
-import io.github.hyperosauto.unlockapp.FirstAppKeys;
+import io.github.codecodegogogo.HyperosAutoTaskPlus.FirstAppKeys;
 
 /**
  * 「屏幕状态」条件：亮屏 / 息屏持续了指定时长后触发。

@@ -1,6 +1,6 @@
-package io.github.hyperosauto.unlockapp.inject;
+package io.github.codecodegogogo.HyperosAutoTaskPlus.inject;
 
-import io.github.hyperosauto.unlockapp.FirstAppKeys;
+import io.github.codecodegogogo.HyperosAutoTaskPlus.FirstAppKeys;
 
 /** 首次离开应用：所选应用的进程被彻底清出内存（后台被杀、上滑清理等）时满足。 */
 public class FirstLeaveAppConditionItem extends FirstAppConditionItem {

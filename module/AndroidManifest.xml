@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="io.github.hyperosauto.unlockapp"
-    android:versionCode="2"
-    android:versionName="2.0">
+    package="io.github.codecodegogogo.HyperosAutoTaskPlus"
+    android:versionCode="3"
+    android:versionName="1.2.0">
 
     <!-- targetSdk 保持 29：Android 对 targetSdk>=30 强制要求 v2 签名，
          而我们用 JDK 自带的 jarsigner 只能做 v1。模块无界面无运行逻辑，不受影响。 -->

@@ -3,7 +3,7 @@
 一个 LSPosed 模块，给 HyperOS「安全服务」里的**自动任务**补了几个原生没有的功能。
 
 - 目标版本：安全服务 12.3.5（260211.0.1），包名 `com.miui.securitycenter`
-- 模块包名：`io.github.hyperosauto.unlockapp`
+- 模块包名：`io.github.codecodegogogo.HyperosAutoTaskPlus`
 - 只 hook 安全服务，没有界面，装上、在 LSPosed 里勾选、重启安全服务即可
 
 ## 增加的功能
@@ -40,6 +40,17 @@
 时长在输入框里填数字，单位可选秒 / 分钟 / 小时 / 天，填 0 表示一进入该状态就触发。
 勾选「退出时恢复」时，退出条件是相反的状态（例如「息屏 10 分钟」的退出条件是「亮屏时」）。
 
+### 5. 退出条件可以自定义
+
+原生：勾选「退出时恢复」后，退出条件只能是每个触发条件的反向条件（自动生成、不能改、不能删）。
+现在退出条件列表和触发条件列表一样可以操作：
+
+- 列表末尾有「添加条件」，可以额外加任意条件作为退出条件（自定义时间除外）
+- 点已有的退出条件可以修改，右侧有删除按钮，自动生成的那条也能删掉换成别的
+- 有多条时每条前面有勾选框，勾选的才生效
+
+触发条件之间是「与」（全部满足才执行），退出条件之间是「或」（勾选的任一满足就恢复），和原生一致。
+
 ## 构建
 
 依赖已经放在仓库里，不需要 Android SDK / Gradle：
@@ -63,12 +74,13 @@ module/
   AndroidManifest.xml
   assets/xposed_init                 模块入口类名
   res/                               图标、名称、作用域
-  src/io/github/hyperosauto/unlockapp/
+  src/io.github.codecodegogogo.HyperosAutoTaskPlus/
     MainHook.java                    入口，依次装载下面三个功能
     UnlockAppResultHook.java         功能 1
     FirstAppConditionHook.java       功能 2 的 hook 部分
     InvisibleModeResultHook.java     功能 3 的 hook 部分
     ScreenStateConditionHook.java    功能 4 的 hook 部分
+    ExitConditionHook.java           功能 5
     FirstAppKeys.java                各条件 / 结果的 key 常量
     DexInjector.java                 把模块 dex 注入安全服务的 ClassLoader
     HookUtils.java                   按签名找方法等公共工具

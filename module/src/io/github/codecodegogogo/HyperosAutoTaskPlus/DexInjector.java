@@ -1,4 +1,4 @@
-package io.github.hyperosauto.unlockapp;
+package io.github.codecodegogogo.HyperosAutoTaskPlus;
 
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
@@ -24,7 +24,7 @@ final class DexInjector {
     private static final String TAG = MainHook.TAG;
 
     /** 模块自己的包名，与 AndroidManifest 一致 */
-    static final String MODULE_PKG = "io.github.hyperosauto.unlockapp";
+    static final String MODULE_PKG = "io.github.codecodegogogo.HyperosAutoTaskPlus";
 
     private static final String RUNTIME_CLASS = MODULE_PKG + ".inject.FirstAppRuntime";
     private static final String INVISIBLE_RUNTIME_CLASS = MODULE_PKG + ".inject.InvisibleModeRuntime";

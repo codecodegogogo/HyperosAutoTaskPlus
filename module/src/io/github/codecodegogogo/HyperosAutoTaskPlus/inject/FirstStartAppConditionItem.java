@@ -1,6 +1,6 @@
-package io.github.hyperosauto.unlockapp.inject;
+package io.github.codecodegogogo.HyperosAutoTaskPlus.inject;
 
-import io.github.hyperosauto.unlockapp.FirstAppKeys;
+import io.github.codecodegogogo.HyperosAutoTaskPlus.FirstAppKeys;
 
 /** 首次启动应用：所选应用的进程被创建（从未运行到运行，包括被后台唤起）时满足。 */
 public class FirstStartAppConditionItem extends FirstAppConditionItem {
