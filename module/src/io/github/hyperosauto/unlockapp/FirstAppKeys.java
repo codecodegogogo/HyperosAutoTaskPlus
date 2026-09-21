@@ -23,6 +23,11 @@ public final class FirstAppKeys {
     /** 原生「定位」结果，隐身模式紧跟在它之后 */
     public static final String KEY_LOCATION_RESULT = "key_location_result_item";
 
+    /** 屏幕状态条件：亮屏 / 息屏持续了指定时长 */
+    public static final String KEY_SCREEN_STATE_CONDITION = "key_screen_state_condition_item";
+    /** 原生「锁屏」条件，屏幕状态紧跟在它之后 */
+    public static final String KEY_LOCK_SCREEN_CONDITION = "key_lock_screen_condition_item";
+
     /** AddConditionFragment 里「事件」分类的 preference key，原「启动应用/离开应用」就在这一组 */
     public static final String CATEGORY_EVENT = "key_event_condition_category";
     /** AddResultFragment 里「设置项」分类的 preference key（蓝牙/WLAN/飞行/定位/热点……） */
@@ -37,6 +42,10 @@ public final class FirstAppKeys {
 
     public static boolean isInvisibleModeKey(String key) {
         return KEY_INVISIBLE_MODE_RESULT.equals(key);
+    }
+
+    public static boolean isScreenStateKey(String key) {
+        return KEY_SCREEN_STATE_CONDITION.equals(key);
     }
 
     public static String opposite(String key) {

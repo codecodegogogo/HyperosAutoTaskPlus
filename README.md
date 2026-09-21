@@ -30,6 +30,16 @@
 隐身模式是系统权限中心里那个开关（开启后所有应用无法录音、定位、拍照），系统只在设置页给了开关，
 没有快捷入口。现在可以在自动任务里自动开关它，勾选「退出时恢复」会在任务退出时切回相反状态。
 
+### 4. 新增条件：屏幕状态
+
+在「添加条件 → 事件」里，紧跟在「锁屏」之后。界面和「电量」条件一样是两张卡片：
+
+- **亮屏时间**：屏幕持续点亮了指定时长后触发
+- **息屏时间**：屏幕持续熄灭了指定时长后触发
+
+时长在输入框里填数字，单位可选秒 / 分钟 / 小时 / 天，填 0 表示一进入该状态就触发。
+勾选「退出时恢复」时，退出条件是相反的状态（例如「息屏 10 分钟」的退出条件是「亮屏时」）。
+
 ## 构建
 
 依赖已经放在仓库里，不需要 Android SDK / Gradle：
@@ -58,6 +68,7 @@ module/
     UnlockAppResultHook.java         功能 1
     FirstAppConditionHook.java       功能 2 的 hook 部分
     InvisibleModeResultHook.java     功能 3 的 hook 部分
+    ScreenStateConditionHook.java    功能 4 的 hook 部分
     FirstAppKeys.java                各条件 / 结果的 key 常量
     DexInjector.java                 把模块 dex 注入安全服务的 ClassLoader
     HookUtils.java                   按签名找方法等公共工具
@@ -68,6 +79,9 @@ module/
       FirstAppRuntime.java           进程存活跟踪，通知引擎重新判定
       InvisibleModeResultItem.java   隐身模式结果项
       InvisibleModeRuntime.java      切换隐身模式、弹开启 / 关闭选择框
+      ScreenStateConditionItem.java  屏幕状态条件项
+      ScreenStateRuntime.java        亮 / 灭屏计时、到点通知引擎、卡片式编辑对话框
+      EngineBridge.java              把「请重新判定这些条件」交给引擎，各运行时共用
   stubs/                             安全服务与 miuix 类的编译桩，只参与编译不进 dex
 build.ps1 / build.sh                 构建脚本
 ```

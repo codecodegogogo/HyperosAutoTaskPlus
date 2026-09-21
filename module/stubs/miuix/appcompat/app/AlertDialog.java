@@ -29,6 +29,10 @@ public class AlertDialog extends android.app.Dialog {
             throw new RuntimeException("stub");
         }
 
+        public Builder setView(android.view.View view) {
+            throw new RuntimeException("stub");
+        }
+
         public Builder setPositiveButton(int textId, DialogInterface.OnClickListener listener) {
             throw new RuntimeException("stub");
         }

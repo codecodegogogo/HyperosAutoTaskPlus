@@ -50,5 +50,12 @@ public class MainHook implements IXposedHookLoadPackage {
             XposedBridge.log(TAG + ": 「隐身模式」结果 hook 失败");
             XposedBridge.log(t);
         }
+
+        try {
+            ScreenStateConditionHook.install(lpparam);
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": 「屏幕状态」条件 hook 失败");
+            XposedBridge.log(t);
+        }
     }
 }

@@ -200,7 +200,7 @@ public final class InvisibleModeRuntime {
      * 文案和图标都尽量借安全中心自己的资源（按名字找，避免写死随版本漂移的 id），
      * 找不到再退回按系统语言给的中/英两套。
      */
-    static String title() {
+    public static String title() {
         String s = appString("cetus_invisible_mode");
         if (s != null) {
             return s;

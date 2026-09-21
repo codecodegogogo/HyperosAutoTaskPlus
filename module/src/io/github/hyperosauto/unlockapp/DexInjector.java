@@ -28,9 +28,11 @@ final class DexInjector {
 
     private static final String RUNTIME_CLASS = MODULE_PKG + ".inject.FirstAppRuntime";
     private static final String INVISIBLE_RUNTIME_CLASS = MODULE_PKG + ".inject.InvisibleModeRuntime";
+    private static final String SCREEN_RUNTIME_CLASS = MODULE_PKG + ".inject.ScreenStateRuntime";
 
     private static volatile Class<?> sRuntime;
     private static volatile Class<?> sInvisibleRuntime;
+    private static volatile Class<?> sScreenRuntime;
     private static volatile Context sAppContext;
 
     private DexInjector() {
@@ -48,6 +50,11 @@ final class DexInjector {
     /** 注入后的 InvisibleModeRuntime，注入失败时为 null */
     static Class<?> invisibleRuntime() {
         return sInvisibleRuntime;
+    }
+
+    /** 注入后的 ScreenStateRuntime，注入失败时为 null */
+    static Class<?> screenRuntime() {
+        return sScreenRuntime;
     }
 
     static Context appContext() {
@@ -83,6 +90,12 @@ final class DexInjector {
             sInvisibleRuntime = cls;
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": 加载 InvisibleModeRuntime 失败，「隐身模式」结果不可用");
+            XposedBridge.log(t);
+        }
+        try {
+            sScreenRuntime = Class.forName(SCREEN_RUNTIME_CLASS, true, appLoader);
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": 加载 ScreenStateRuntime 失败，「屏幕状态」条件不可用");
             XposedBridge.log(t);
         }
     }

@@ -1,6 +1,7 @@
 package io.github.hyperosauto.unlockapp;
 
 import android.content.Context;
+import android.graphics.drawable.Drawable;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -22,6 +23,7 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
  *   g2.M0.A(Context)    结果列表（放在「设置项」分类的「定位」之后）
  *   g2.M0.B(key)        key -> 新实例（结果列表、编辑页）
  *   g2.M0.h(key)        key -> Class（数据库 Gson 反序列化）
+ *   AddResultFragment.v1()                列表建好后把被禁用的隐身模式图标压成半透明
  *   AddResultFragment.u2(item)            添加结果页点击 -> 弹「开启/关闭」单选框 -> w0(item) 返回
  *   g2.K0.G0(ctx,item,adapter,pos)        任务编辑页点击已添加的结果 -> 同样的单选框 -> 刷新该行
  *
@@ -36,6 +38,9 @@ final class InvisibleModeResultHook {
     private static final String CLASS_K0 = "g2.K0";
     private static final String CLASS_TASK_ITEM = "com.miui.autotask.taskitem.TaskItem";
     private static final String CLASS_ADD_RESULT_FRAGMENT = "com.miui.autotask.fragment.AddResultFragment";
+
+    /** 原生 *_tran 图标的透明度是 0.3 */
+    private static final int DISABLED_ALPHA = 77;
 
     private InvisibleModeResultHook() {
     }
@@ -106,6 +111,20 @@ final class InvisibleModeResultHook {
 
     private static void hookAddResultFragment(ClassLoader cl, Class<?> taskItem) {
         Class<?> fragment = XposedHelpers.findClass(CLASS_ADD_RESULT_FRAGMENT, cl);
+
+        // private void v1()：按 M0.A 的分类建列表，被互斥的项 setEnabled(false) 并换成 i() 的半透明图标。
+        // 隐身模式没有专门的半透明图，三态都是同一张，所以列表建好后把被禁用的那一项图标压成 30% 透明。
+        Method buildList = HookUtils.findMethod(fragment, "v1", void.class);
+        if (buildList != null) {
+            XposedBridge.hookMethod(buildList, new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) {
+                    if (ready()) {
+                        dimDisabledIcon(param.thisObject);
+                    }
+                }
+            });
+        }
 
         // private void u2(TaskItem)：点击某个结果后的分发，按 key switch，不认识的 key 什么都不做
         Method onResultClick = HookUtils.findMethod(fragment, "u2", void.class, taskItem);
@@ -213,6 +232,33 @@ final class InvisibleModeResultHook {
     }
 
     // ------------------------------------------------------------------ 工具
+
+    /** 在「设置项」分类里找到被禁用的「隐身模式」，把它的图标压成半透明，和原生禁用态一致 */
+    private static void dimDisabledIcon(Object fragment) {
+        try {
+            Object category = XposedHelpers.callMethod(fragment, "findPreference", FirstAppKeys.CATEGORY_RESULT_SETTING);
+            if (category == null) {
+                return;
+            }
+            String title = String.valueOf(XposedHelpers.callStaticMethod(runtime(), "title"));
+            int count = (Integer) XposedHelpers.callMethod(category, "getPreferenceCount");
+            for (int i = 0; i < count; i++) {
+                Object pref = XposedHelpers.callMethod(category, "getPreference", i);
+                if ((Boolean) XposedHelpers.callMethod(pref, "isEnabled")
+                        || !title.contentEquals((CharSequence) XposedHelpers.callMethod(pref, "getTitle"))) {
+                    continue;
+                }
+                Drawable icon = (Drawable) XposedHelpers.callMethod(pref, "getIcon");
+                if (icon != null) {
+                    Drawable dimmed = icon.mutate();
+                    dimmed.setAlpha(DISABLED_ALPHA);
+                    XposedHelpers.callMethod(pref, "setIcon", dimmed);
+                }
+            }
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": 压暗隐身模式禁用态图标失败: " + t);
+        }
+    }
 
     private static boolean ready() {
         return DexInjector.invisibleRuntime() != null;

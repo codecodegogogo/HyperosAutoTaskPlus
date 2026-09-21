@@ -55,8 +55,6 @@ public final class FirstAppRuntime {
 
     private static volatile boolean sStarted;
     private static Context sContext;
-    private static Object sEngine;
-    private static Method sNotify;
     // ActivityManager 内部用 ArrayMap 持有 listener，这里再留一份强引用防止意外回收
     @SuppressWarnings("unused")
     private static Object sListener;
@@ -168,8 +166,7 @@ public final class FirstAppRuntime {
         }
         try {
             sContext = context.getApplicationContext() != null ? context.getApplicationContext() : context;
-            sEngine = engine;
-            sNotify = findNotifyMethod(engine);
+            EngineBridge.attach(engine);
             registerUidListener();
             bootstrapAlive();
             Log.i(TAG, "process tracker started, alive pkgs=" + PKG_ALIVE.size());
@@ -383,49 +380,18 @@ public final class FirstAppRuntime {
 
     // ------------------------------------------------------------------ 通知引擎
 
-    /**
-     * 挑出包含该包名、且方向匹配的条件项，交给引擎的 K(ConcurrentHashMap)。
-     * 引擎会在自己的 auto_task 线程里逐个调 m()，满足就执行/恢复任务，
-     * 与它处理前台切换（V()/Q()）的路径完全相同。
-     */
+    /** 挑出包含该包名、且方向匹配的条件项，交给引擎重新判定 */
     private static void notifyEngine(String pkg, boolean started) {
-        if (sEngine == null || sNotify == null || ITEMS.isEmpty()) {
+        if (ITEMS.isEmpty()) {
             return;
         }
-        ConcurrentHashMap<String, TaskItem> hit = new ConcurrentHashMap<>();
+        Map<String, TaskItem> hit = new HashMap<>();
         for (Map.Entry<String, FirstAppConditionItem> e : ITEMS.entrySet()) {
             FirstAppConditionItem item = e.getValue();
             if (item.isStart() == started && item.matches(pkg)) {
                 hit.put(e.getKey(), item);
             }
         }
-        if (hit.isEmpty()) {
-            return;
-        }
-        Log.i(TAG, (started ? "process started: " : "process gone: ") + pkg + " -> " + hit.keySet());
-        try {
-            sNotify.invoke(sEngine, hit);
-        } catch (Throwable t) {
-            Log.e(TAG, "notify engine failed", t);
-        }
-    }
-
-    private static Method findNotifyMethod(Object engine) throws NoSuchMethodException {
-        Class<?> cls = engine.getClass();
-        // K() 是 public 的对外入口，内部转 H() 投递到工作线程；名字随版本混淆可能变化，按签名兜底
-        try {
-            return cls.getMethod("K", ConcurrentHashMap.class);
-        } catch (NoSuchMethodException ignored) {
-            // fall through
-        }
-        for (Method m : cls.getDeclaredMethods()) {
-            Class<?>[] p = m.getParameterTypes();
-            if (p.length == 1 && p[0] == ConcurrentHashMap.class
-                    && m.getReturnType() == void.class
-                    && java.lang.reflect.Modifier.isPublic(m.getModifiers())) {
-                return m;
-            }
-        }
-        throw new NoSuchMethodException("b2.j#K(ConcurrentHashMap)");
+        EngineBridge.notify(hit, (started ? "process started: " : "process gone: ") + pkg);
     }
 }
