@@ -3,6 +3,9 @@ package io.github.codecodegogogo.HyperosAutoTaskPlus;
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
 
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -34,6 +37,10 @@ final class DexInjector {
     private static volatile Class<?> sInvisibleRuntime;
     private static volatile Class<?> sScreenRuntime;
     private static volatile Context sAppContext;
+    private static volatile ClassLoader sAppLoader;
+    /** 其它注入侧 Runtime 类，按简名缓存；加载失败记 null 不再重试 */
+    private static final Map<String, Class<?>> RUNTIMES = new ConcurrentHashMap<>();
+    private static final Set<String> FAILED = ConcurrentHashMap.newKeySet();
 
     private DexInjector() {
     }
@@ -61,11 +68,37 @@ final class DexInjector {
         return sAppContext;
     }
 
+    /**
+     * 按简名取注入后的 Runtime 类（如 "IntervalRuntime"），dex 尚未注入或类加载失败返回 null。
+     * 新条件的 hook 统一走这里，不再为每个 Runtime 单独加字段。
+     */
+    static Class<?> runtime(String simpleName) {
+        Class<?> cached = RUNTIMES.get(simpleName);
+        if (cached != null) {
+            return cached;
+        }
+        ClassLoader loader = sAppLoader;
+        if (sRuntime == null || loader == null || FAILED.contains(simpleName)) {
+            return null;
+        }
+        try {
+            Class<?> cls = Class.forName(MODULE_PKG + ".inject." + simpleName, true, loader);
+            RUNTIMES.put(simpleName, cls);
+            return cls;
+        } catch (Throwable t) {
+            FAILED.add(simpleName);
+            XposedBridge.log(TAG + ": 加载 " + simpleName + " 失败，对应功能不可用");
+            XposedBridge.log(t);
+            return null;
+        }
+    }
+
     static synchronized void inject(Context context, ClassLoader appLoader) {
         if (sRuntime != null) {
             return;
         }
         sAppContext = context;
+        sAppLoader = appLoader;
         try {
             if (!(appLoader instanceof BaseDexClassLoader)) {
                 XposedBridge.log(TAG + ": 应用 ClassLoader 不是 BaseDexClassLoader，无法注入: " + appLoader);

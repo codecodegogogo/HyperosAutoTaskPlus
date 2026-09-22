@@ -28,6 +28,29 @@ public final class FirstAppKeys {
     /** 原生「锁屏」条件，屏幕状态紧跟在它之后 */
     public static final String KEY_LOCK_SCREEN_CONDITION = "key_lock_screen_condition_item";
 
+    /** 时间间隔条件：每隔 N 秒/分钟/小时/天触发一次 */
+    public static final String KEY_INTERVAL_CONDITION = "key_interval_condition_item";
+    /** 原生「自定义时间」条件，时间间隔紧跟在它之后 */
+    public static final String KEY_CUSTOM_TIME_CONDITION = "key_custom_time_condition_item";
+
+    /** 到达 / 离开地理围栏：原生「到达 / 离开某地」加可自定义的半径 */
+    public static final String KEY_GEOFENCE_ENTER_CONDITION = "key_geofence_enter_condition_item";
+    public static final String KEY_GEOFENCE_LEAVE_CONDITION = "key_geofence_leave_condition_item";
+    /** 原生「到达某地 / 离开某地」条件，地理围栏紧跟在「离开某地」之后 */
+    public static final String KEY_TO_SOMEWHERE_CONDITION = "key_to_somewhere_condition_item";
+    public static final String KEY_LEAVE_SOMEWHERE_CONDITION = "key_leave_condition_item";
+
+    /** 传感器：设备动作（翻转 / 摇晃）与光线 */
+    public static final String KEY_DEVICE_MOTION_CONDITION = "key_device_motion_condition_item";
+    public static final String KEY_LIGHT_CONDITION = "key_light_sensor_condition_item";
+
+    /** AddConditionFragment 里「情境」分类的 preference key，自定义时间 / 到达某地在这一组 */
+    public static final String CATEGORY_SITUATION = "key_situation_condition_category";
+    /** 「通信」分类，新加的「传感器」分类排在它前面 */
+    public static final String CATEGORY_COMMUNICATION = "key_comminication_condition_category";
+    /** 模块新增的「传感器」分类 */
+    public static final String CATEGORY_SENSOR = "key_sensor_condition_category";
+
     /** AddConditionFragment 里「事件」分类的 preference key，原「启动应用/离开应用」就在这一组 */
     public static final String CATEGORY_EVENT = "key_event_condition_category";
     /** AddResultFragment 里「设置项」分类的 preference key（蓝牙/WLAN/飞行/定位/热点……） */
@@ -48,12 +71,30 @@ public final class FirstAppKeys {
         return KEY_SCREEN_STATE_CONDITION.equals(key);
     }
 
+    public static boolean isIntervalKey(String key) {
+        return KEY_INTERVAL_CONDITION.equals(key);
+    }
+
+    public static boolean isGeofenceKey(String key) {
+        return KEY_GEOFENCE_ENTER_CONDITION.equals(key) || KEY_GEOFENCE_LEAVE_CONDITION.equals(key);
+    }
+
+    public static boolean isSensorKey(String key) {
+        return KEY_DEVICE_MOTION_CONDITION.equals(key) || KEY_LIGHT_CONDITION.equals(key);
+    }
+
     public static String opposite(String key) {
         if (KEY_FIRST_START.equals(key)) {
             return KEY_FIRST_LEAVE;
         }
         if (KEY_FIRST_LEAVE.equals(key)) {
             return KEY_FIRST_START;
+        }
+        if (KEY_GEOFENCE_ENTER_CONDITION.equals(key)) {
+            return KEY_GEOFENCE_LEAVE_CONDITION;
+        }
+        if (KEY_GEOFENCE_LEAVE_CONDITION.equals(key)) {
+            return KEY_GEOFENCE_ENTER_CONDITION;
         }
         return key;
     }

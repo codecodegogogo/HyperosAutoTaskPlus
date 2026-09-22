@@ -182,6 +182,7 @@ final class ExitConditionHook {
                         }
                     }
                     unable.add(KEY_CUSTOM_TIME_CONDITION);
+                    unable.add(FirstAppKeys.KEY_INTERVAL_CONDITION);
                     XposedHelpers.callStaticMethod(addBaseActivity, "L0",
                             activity, unable, REQUEST_ADD_EXIT_CONDITION, addConditionActivity);
                     return;
