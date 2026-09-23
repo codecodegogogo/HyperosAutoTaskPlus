@@ -1,18 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="io.github.codecodegogogo.HyperosAutoTaskPlus"
-    android:versionCode="3"
-    android:versionName="1.2.0">
+    android:versionCode="17"
+    android:versionName="1.9.2">
 
     <!-- targetSdk 保持 29：Android 对 targetSdk>=30 强制要求 v2 签名，
-         而我们用 JDK 自带的 jarsigner 只能做 v1。模块无界面无运行逻辑，不受影响。 -->
+         而当前构建使用 JDK 自带的 jarsigner 生成 v1 签名。注入代码使用安全服务的运行环境。 -->
     <uses-sdk android:minSdkVersion="29" android:targetSdkVersion="29" />
+
+    <permission
+        android:name="io.github.codecodegogogo.HyperosAutoTaskPlus.permission.MMS_ATTACHMENT"
+        android:protectionLevel="signature" />
 
     <application
         android:label="@string/app_name"
         android:icon="@drawable/ic_launcher"
         android:allowBackup="false"
         android:hasCode="true">
+
+        <!-- 导出仅用于系统安全服务跨进程创建附件；Provider 内逐入口校验调用 UID，
+             其它进程仅凭临时单文件 URI 读授权访问，不能创建、修改或枚举文件。 -->
+        <provider
+            android:name=".MmsAttachmentProvider"
+            android:authorities="io.github.codecodegogogo.HyperosAutoTaskPlus.mms"
+            android:exported="true"
+            android:readPermission="io.github.codecodegogogo.HyperosAutoTaskPlus.permission.MMS_ATTACHMENT"
+            android:writePermission="io.github.codecodegogogo.HyperosAutoTaskPlus.permission.MMS_ATTACHMENT"
+            android:grantUriPermissions="true" />
 
         <meta-data android:name="xposedmodule" android:value="true" />
         <meta-data android:name="xposeddescription" android:value="@string/xposed_desc" />

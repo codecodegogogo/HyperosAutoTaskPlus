@@ -14,6 +14,10 @@ public class AlertDialog extends android.app.Dialog {
         super(context);
     }
 
+    public android.widget.Button getButton(int which) {
+        throw new RuntimeException("stub");
+    }
+
     public static class Builder {
 
         public Builder(Context context) {
@@ -26,6 +30,11 @@ public class AlertDialog extends android.app.Dialog {
 
         public Builder setSingleChoiceItems(CharSequence[] items, int checkedItem,
                                             DialogInterface.OnClickListener listener) {
+            throw new RuntimeException("stub");
+        }
+
+        public Builder setMultiChoiceItems(CharSequence[] items, boolean[] checkedItems,
+                                           DialogInterface.OnMultiChoiceClickListener listener) {
             throw new RuntimeException("stub");
         }
 
