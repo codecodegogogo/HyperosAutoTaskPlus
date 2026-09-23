@@ -1,5 +1,3 @@
-#主项目地址：https://github.com/codecodegogogo/HyperosAutoTaskPlus
-
 # Hyper自动任务增强
 
 一个 LSPosed 模块，给 HyperOS「安全服务」里的**自动任务**补了几个原生没有的功能。
