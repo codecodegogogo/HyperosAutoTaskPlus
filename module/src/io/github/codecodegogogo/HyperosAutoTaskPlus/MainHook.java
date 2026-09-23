@@ -17,6 +17,8 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
  *   6. {@link IntervalConditionHook}    新增「时间间隔」条件（每隔 N 秒/分钟/小时/天）；
  *   7. {@link SensorConditionHook}      新增「传感器」分类：设备动作（翻转 / 摇晃）、光线；
  *   8. {@link GeofenceConditionHook}    新增「到达 / 离开地理围栏」条件（可自定义半径）。
+ *   9. {@link DeviceActionResultHook}   新增录音、录屏、截图、拍照、拨号、短信、邮件和播放音频结果。
+ *  10. {@link UnlockFailureConditionHook} 连续解锁失败次数；SystemUI 负责提供认证事件。
  *
  * 目标版本：安全服务 12.3.5（260211.0.1）。混淆名（g2.M0、b2.j 等）随版本可能变化，
  * 各 hook 均按签名兜底并独立 try/catch，某一处失效不影响其余功能。
@@ -29,6 +31,10 @@ public class MainHook implements IXposedHookLoadPackage {
 
     @Override
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) {
+        if (UnlockFailureSourceHook.SYSTEM_UI.equals(lpparam.packageName)) {
+            HookUtils.step("SystemUI unlock source", () -> UnlockFailureSourceHook.install(lpparam));
+            return;
+        }
         if (!TARGET_PKG.equals(lpparam.packageName)) {
             return;
         }
@@ -90,5 +96,14 @@ public class MainHook implements IXposedHookLoadPackage {
             XposedBridge.log(TAG + ": 「地理围栏」条件 hook 失败");
             XposedBridge.log(t);
         }
+
+        try {
+            DeviceActionResultHook.install(lpparam);
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": 「设备操作」结果 hook 失败");
+            XposedBridge.log(t);
+        }
+
+        HookUtils.step("unlock failure condition", () -> UnlockFailureConditionHook.install(lpparam));
     }
 }

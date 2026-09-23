@@ -195,7 +195,7 @@ final class InvisibleModeResultHook {
      * 条件项的编辑分发 F0 形状相同，区别在第三个参数：结果用的是 RecyclerView.Adapter
      * （有 notifyItemChanged(int)），条件用的是 RecyclerViewPreference 的回调接口。
      */
-    private static Method findEditMethod(Class<?> k0, Class<?> taskItem) {
+    static Method findEditMethod(Class<?> k0, Class<?> taskItem) {
         Method found = null;
         for (Method m : k0.getDeclaredMethods()) {
             Class<?>[] p = m.getParameterTypes();

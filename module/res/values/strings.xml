@@ -4,5 +4,6 @@
     <string name="xposed_desc">为HyperOS自动任务增加多项功能</string>
     <string-array name="xposed_scope">
         <item>com.miui.securitycenter</item>
+        <item>com.android.systemui</item>
     </string-array>
 </resources>

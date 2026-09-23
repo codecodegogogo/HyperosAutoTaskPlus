@@ -23,10 +23,25 @@ public final class FirstAppKeys {
     /** 原生「定位」结果，隐身模式紧跟在它之后 */
     public static final String KEY_LOCATION_RESULT = "key_location_result_item";
 
+    /** 设备操作结果：参数和其它 TaskItem 一样随任务保存。 */
+    public static final String KEY_AUDIO_RECORD_RESULT = "key_audio_record_result_item";
+    public static final String KEY_SCREEN_RECORD_RESULT = "key_screen_record_result_item";
+    public static final String KEY_SCREENSHOT_RESULT = "key_screenshot_result_item";
+    public static final String KEY_PHOTO_RESULT = "key_photo_result_item";
+    public static final String KEY_CALL_RESULT = "key_call_result_item";
+    public static final String KEY_SMS_RESULT = "key_sms_result_item";
+    public static final String KEY_EMAIL_RESULT = "key_email_result_item";
+    public static final String KEY_PLAY_AUDIO_RESULT = "key_play_audio_result_item";
+    public static final String KEY_NOTIFICATION_RESULT = "key_notification_result_item";
+    public static final String CATEGORY_RESULT_FUNCTION = "key_function_result_category";
+
     /** 屏幕状态条件：亮屏 / 息屏持续了指定时长 */
     public static final String KEY_SCREEN_STATE_CONDITION = "key_screen_state_condition_item";
     /** 原生「锁屏」条件，屏幕状态紧跟在它之后 */
     public static final String KEY_LOCK_SCREEN_CONDITION = "key_lock_screen_condition_item";
+
+    /** 当前设备用户连续解锁失败达到指定次数，成功解锁后清零。 */
+    public static final String KEY_UNLOCK_FAILURE_CONDITION = "key_unlock_failure_condition_item";
 
     /** 时间间隔条件：每隔 N 秒/分钟/小时/天触发一次 */
     public static final String KEY_INTERVAL_CONDITION = "key_interval_condition_item";
@@ -67,8 +82,19 @@ public final class FirstAppKeys {
         return KEY_INVISIBLE_MODE_RESULT.equals(key);
     }
 
+    public static boolean isDeviceActionKey(String key) {
+        return KEY_AUDIO_RECORD_RESULT.equals(key) || KEY_SCREEN_RECORD_RESULT.equals(key)
+                || KEY_SCREENSHOT_RESULT.equals(key) || KEY_PHOTO_RESULT.equals(key)
+                || KEY_CALL_RESULT.equals(key) || KEY_SMS_RESULT.equals(key) || KEY_EMAIL_RESULT.equals(key)
+                || KEY_PLAY_AUDIO_RESULT.equals(key) || KEY_NOTIFICATION_RESULT.equals(key);
+    }
+
     public static boolean isScreenStateKey(String key) {
         return KEY_SCREEN_STATE_CONDITION.equals(key);
+    }
+
+    public static boolean isUnlockFailureKey(String key) {
+        return KEY_UNLOCK_FAILURE_CONDITION.equals(key);
     }
 
     public static boolean isIntervalKey(String key) {
