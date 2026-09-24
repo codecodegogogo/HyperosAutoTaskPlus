@@ -34,8 +34,6 @@ final class InvisibleModeResultHook {
 
     private static final String TAG = MainHook.TAG;
 
-    private static final String CLASS_M0 = "g2.M0";
-    private static final String CLASS_K0 = "g2.K0";
     private static final String CLASS_TASK_ITEM = "com.miui.autotask.taskitem.TaskItem";
     private static final String CLASS_ADD_RESULT_FRAGMENT = "com.miui.autotask.fragment.AddResultFragment";
 
@@ -57,7 +55,7 @@ final class InvisibleModeResultHook {
     // ------------------------------------------------------------------ g2.M0
 
     private static void hookM0(ClassLoader cl) {
-        Class<?> m0 = XposedHelpers.findClass(CLASS_M0, cl);
+        Class<?> m0 = TargetResolver.factory(cl);
 
         // Class h(String key)：数据库里存的是 key + json，靠它找回具体类
         XposedHelpers.findAndHookMethod(m0, "h", String.class, new XC_MethodHook() {
@@ -112,9 +110,9 @@ final class InvisibleModeResultHook {
     private static void hookAddResultFragment(ClassLoader cl, Class<?> taskItem) {
         Class<?> fragment = XposedHelpers.findClass(CLASS_ADD_RESULT_FRAGMENT, cl);
 
-        // private void v1()：按 M0.A 的分类建列表，被互斥的项 setEnabled(false) 并换成 i() 的半透明图标。
+        // private void v1/s1()：按 M0.A 的分类建列表，被互斥的项 setEnabled(false) 并换成 i() 的半透明图标。
         // 隐身模式没有专门的半透明图，三态都是同一张，所以列表建好后把被禁用的那一项图标压成 30% 透明。
-        Method buildList = HookUtils.findMethod(fragment, "v1", void.class);
+        Method buildList = HookUtils.findMethod(fragment, new String[]{"v1", "s1"}, void.class);
         if (buildList != null) {
             XposedBridge.hookMethod(buildList, new XC_MethodHook() {
                 @Override
@@ -126,10 +124,13 @@ final class InvisibleModeResultHook {
             });
         }
 
-        // private void u2(TaskItem)：点击某个结果后的分发，按 key switch，不认识的 key 什么都不做
-        Method onResultClick = HookUtils.findMethod(fragment, "u2", void.class, taskItem);
-        if (onResultClick == null) {
-            XposedBridge.log(TAG + ": AddResultFragment 的点击分发方法未找到，隐身模式无法从列表添加");
+        // private void u2/r2(TaskItem)：点击某个结果后的分发，按 key switch，不认识的 key 什么都不做
+        Method onResultClick = HookUtils.findMethod(fragment, new String[]{"u2", "r2"},
+                void.class, taskItem);
+        Method applyResult = HookUtils.findMethod(fragment, new String[]{"w0", "t0"},
+                void.class, taskItem);
+        if (onResultClick == null || applyResult == null) {
+            XposedBridge.log(TAG + ": AddResultFragment 的点击/确认方法未找到，隐身模式无法从列表添加");
             return;
         }
 
@@ -149,8 +150,8 @@ final class InvisibleModeResultHook {
                 XposedHelpers.callMethod(item, "v", true);
                 final Object self = param.thisObject;
                 Runnable onConfirm = () -> {
-                    // AddBaseFragment.w0(TaskItem)：把结果塞进 Intent 返回给任务编辑页
-                    XposedHelpers.callMethod(self, "w0", item);
+                    // AddBaseFragment.w0/t0(TaskItem)：把结果塞进 Intent 返回给任务编辑页
+                    HookUtils.invokeMethod(applyResult, self, item);
                 };
                 XposedHelpers.callStaticMethod(runtime(), "pickAndApply", activity, item, onConfirm);
             }
@@ -160,7 +161,7 @@ final class InvisibleModeResultHook {
     // ------------------------------------------------------------------ 任务编辑页
 
     private static void hookEditDialog(ClassLoader cl, Class<?> taskItem) {
-        Class<?> k0 = XposedHelpers.findClass(CLASS_K0, cl);
+        Class<?> k0 = TargetResolver.editor(cl);
 
         // public static void G0(Context, TaskItem, RecyclerView.Adapter, int)：
         // 编辑页点击已添加的结果，按 key 弹各自的对话框，改完 notifyItemChanged(pos)

@@ -39,8 +39,6 @@ final class FirstAppConditionHook {
 
     private static final String TAG = MainHook.TAG;
 
-    private static final String CLASS_M0 = "g2.M0";
-    private static final String CLASS_ENGINE = "b2.j";
     private static final String CLASS_TASK_ITEM = "com.miui.autotask.taskitem.TaskItem";
     private static final String CLASS_LUNCH_APP_ITEM = "com.miui.autotask.taskitem.LunchAppItem";
     private static final String CLASS_ADD_CONDITION_FRAGMENT = "com.miui.autotask.fragment.AddConditionFragment";
@@ -75,7 +73,7 @@ final class FirstAppConditionHook {
     // ------------------------------------------------------------------ g2.M0
 
     private static void hookM0(ClassLoader cl, Class<?> taskItem) {
-        Class<?> m0 = XposedHelpers.findClass(CLASS_M0, cl);
+        Class<?> m0 = TargetResolver.factory(cl);
 
         // Class h(String key)：数据库里存的是 key + json，靠它找回具体类
         XposedHelpers.findAndHookMethod(m0, "h", String.class, new XC_MethodHook() {
@@ -178,10 +176,12 @@ final class FirstAppConditionHook {
         Class<?> fragment = XposedHelpers.findClass(CLASS_ADD_CONDITION_FRAGMENT, cl);
         final Class<?> selectApp = XposedHelpers.findClass(CLASS_SELECT_APP_ACTIVITY, cl);
 
-        // static void d1(Activity, LunchAppItem, int)：打开选应用页
-        final Method openSelectApp = HookUtils.findMethod(selectApp, "d1", void.class, Activity.class, lunchAppItem, int.class);
-        // private void q1(TaskItem)：点击某个条件后的分发
-        Method onConditionClick = HookUtils.findMethod(fragment, "q1", void.class, taskItem);
+        // static void d1/e1/S0(Activity, LunchAppItem, int)：打开选应用页
+        final Method openSelectApp = HookUtils.findMethod(selectApp, new String[]{"d1", "e1", "S0"},
+                void.class, Activity.class, lunchAppItem, int.class);
+        // private void q1/n1(TaskItem)：点击某个条件后的分发
+        Method onConditionClick = HookUtils.findMethod(fragment, new String[]{"q1", "n1"},
+                void.class, taskItem);
         if (openSelectApp == null || onConditionClick == null) {
             XposedBridge.log(TAG + ": AddConditionFragment/SelectAppActivity 方法未找到，新条件无法从列表进入");
             return;
@@ -209,8 +209,8 @@ final class FirstAppConditionHook {
     private static void hookSelectAppActivity(ClassLoader cl, Class<?> lunchAppItem) {
         Class<?> selectApp = XposedHelpers.findClass(CLASS_SELECT_APP_ACTIVITY, cl);
 
-        // protected String K0()：按条件 key 决定标题，原生 start/leave 分支里还会把多选开关 j 置 true
-        Method title = HookUtils.findMethod(selectApp, "K0", String.class);
+        // protected String K0/L0/y0()：按条件 key 决定标题，原生 start/leave 分支里还会把多选开关 j 置 true
+        Method title = HookUtils.findMethod(selectApp, new String[]{"K0", "L0", "y0"}, String.class);
         final Field itemField = HookUtils.findField(selectApp, "h", lunchAppItem);
         final Field multiSelectField = HookUtils.findField(selectApp, "j", boolean.class);
         if (title == null || itemField == null || multiSelectField == null) {
@@ -234,7 +234,7 @@ final class FirstAppConditionHook {
     // ------------------------------------------------------------------ 引擎 b2.j
 
     private static void hookEngine(ClassLoader cl, Class<?> taskItem) {
-        Class<?> engine = XposedHelpers.findClass(CLASS_ENGINE, cl);
+        Class<?> engine = TargetResolver.engine(cl);
 
         // 单例构造完成 -> 启动进程跟踪（有一个 synthetic 构造器会套着调私有构造器，start 内部幂等）
         XposedBridge.hookAllConstructors(engine, new XC_MethodHook() {
@@ -257,9 +257,11 @@ final class FirstAppConditionHook {
         });
 
         // private void p(TaskItem)：按 key 把条件项塞进各自的 map，自己的 key 它不认识
-        Method register = HookUtils.findMethod(engine, "p", void.class, taskItem);
-        // private void b1(String uuid, List items)：任务停用/删除时把 uuid 从所有 map 移除
-        Method unregister = HookUtils.findMethod(engine, "b1", void.class, String.class, List.class);
+        Method register = HookUtils.findMethod(engine, new String[]{"p", "t"},
+                void.class, taskItem);
+        // private void b1/d1/o1(String uuid, List items)：任务停用/删除时把 uuid 从所有 map 移除
+        Method unregister = HookUtils.findMethod(engine, new String[]{"b1", "d1", "o1"},
+                void.class, String.class, List.class);
         if (register == null || unregister == null) {
             XposedBridge.log(TAG + ": b2.j 的注册/反注册方法未找到，新条件不会被引擎触发");
             return;

@@ -126,10 +126,7 @@ public final class FirstAppRuntime {
     }
 
     private static void copyApps(LunchAppItem src, LunchAppItem dst) {
-        dst.E(src.z());
-        dst.D(src.y());
-        dst.B(src.v());
-        dst.A(src.u());
+        InjectCompat.copy(src, dst);
     }
 
     /** 对应 b2.j.p()：任务启用时引擎会逐个注册条件项，自己的 key 它不认识，这里接住 */

@@ -20,7 +20,7 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
  *   9. {@link DeviceActionResultHook}   新增录音、录屏、截图、拍照、拨号、短信、邮件和播放音频结果。
  *  10. {@link UnlockFailureConditionHook} 连续解锁失败次数；SystemUI 负责提供认证事件。
  *
- * 目标版本：安全服务 12.3.5（260211.0.1）。混淆名（g2.M0、b2.j 等）随版本可能变化，
+ * 目标版本：安全服务 12.3.5、12.3.2、12.8.6、13.5.9 与 13.6.0。混淆名（g2.M0、b2.j 等）随版本可能变化，
  * 各 hook 均按签名兜底并独立 try/catch，某一处失效不影响其余功能。
  */
 public class MainHook implements IXposedHookLoadPackage {

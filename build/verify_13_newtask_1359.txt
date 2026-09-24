@@ -1,0 +1,31 @@
+== Lcom/miui/autotask/fragment/NewTaskFragment; 
+ fields: a:Lcom/miui/autotask/view/RecyclerViewPreference;, b:Lcom/miui/autotask/view/RecyclerViewPreference;, c:Lcom/miui/autotask/view/RecyclerViewPreference;, d:Lcom/miui/autotask/view/TextEditPreference;, e:I, f:I, g:Lcom/miui/autotask/bean/r;, h:Landroid/view/View;, i:Lcom/google/gson/Gson;, j:Ljava/util/HashMap;, k:Ljava/util/HashMap;, l:Ljava/util/HashMap;, m:Landroidx/preference/CheckBoxPreference;, n:Landroidx/preference/CheckBoxPreference;, o:Landroidx/preference/CheckBoxPreference;, p:Landroidx/preference/CheckBoxPreference;, q:Landroidx/preference/PreferenceCategory;, r:Z, s:Landroid/view/ViewTreeObserver$OnGlobalLayoutListener;
+ public constructor <init>()V
+ static bridge synthetic A0(Lcom/miui/autotask/fragment/NewTaskFragment;)Lcom/miui/autotask/view/RecyclerViewPreference;
+ private B0(Lcom/miui/autotask/bean/r;)V
+ public C0()Z
+ private D0()V
+ private E0(Lcom/miui/autotask/bean/r; Ljava/util/List;)V
+ private F0()V
+ private G0(Lcom/miui/autotask/bean/r;)V
+ private H0()I
+ private synthetic I0()V
+ private synthetic J0(I)V
+ private synthetic K0(Ljava/lang/String;)V
+ private synthetic L0(I)V
+ private synthetic M0(I)V
+ public static N0(Lcom/miui/autotask/bean/r; Z)Lcom/miui/autotask/fragment/NewTaskFragment;
+ public O0()Z
+ public P0()V
+ private Q0(I)V
+ public onActivityResult(I I Landroid/content/Intent;)V
+ public onCreatePreferences(Landroid/os/Bundle; Ljava/lang/String;)V
+ public onPause()V
+ public onResume()V
+ public static synthetic t0(Lcom/miui/autotask/fragment/NewTaskFragment; I)V
+ public static synthetic u0(Lcom/miui/autotask/fragment/NewTaskFragment; I)V
+ public static synthetic v0(Lcom/miui/autotask/fragment/NewTaskFragment;)V
+ public static synthetic w0(Lcom/miui/autotask/fragment/NewTaskFragment; I)V
+ public static synthetic x0(Lcom/miui/autotask/fragment/NewTaskFragment; Ljava/lang/String;)V
+ static bridge synthetic y0(Lcom/miui/autotask/fragment/NewTaskFragment;)Lcom/miui/autotask/view/RecyclerViewPreference;
+ static bridge synthetic z0(Lcom/miui/autotask/fragment/NewTaskFragment;)Lcom/miui/autotask/view/RecyclerViewPreference;
