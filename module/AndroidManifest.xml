@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="io.github.codecodegogogo.HyperosAutoTaskPlus"
-    android:versionCode="17"
-    android:versionName="1.9.2">
+    android:versionCode="18"
+    android:versionName="1.9.3">
 
     <!-- targetSdk 保持 29：Android 对 targetSdk>=30 强制要求 v2 签名，
          而当前构建使用 JDK 自带的 jarsigner 生成 v1 签名。注入代码使用安全服务的运行环境。 -->
