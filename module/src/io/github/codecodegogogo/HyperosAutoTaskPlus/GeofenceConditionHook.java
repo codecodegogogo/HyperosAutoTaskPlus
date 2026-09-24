@@ -3,7 +3,6 @@ package io.github.codecodegogogo.HyperosAutoTaskPlus;
 import android.app.Activity;
 
 import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
 
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedBridge;
@@ -58,15 +57,17 @@ final class GeofenceConditionHook {
 
     private static void hookAddressSelect(ClassLoader cl, Class<?> taskItem, Class<?> addressItem) {
         Class<?> addressSelect = XposedHelpers.findClass(CLASS_ADDRESS_SELECT, cl);
-        final Method open = HookUtils.findMethod(addressSelect, "j1", void.class, Activity.class, addressItem, int.class);
+        final Method open = HookUtils.findMethod(addressSelect, new String[]{"j1", "k1", "X0"},
+                void.class, Activity.class, addressItem, int.class);
         if (open == null) {
-            XposedBridge.log(TAG + ": AddressSelectActivity.j1 未找到，地理围栏条件无法添加");
+            XposedBridge.log(TAG + ": AddressSelectActivity.j1/k1/X0 未找到，地理围栏条件无法添加");
             return;
         }
 
-        // 添加条件页：原生 q1 的 switch 不认识我们的 key，这里直接打开地址选择页
+        // 添加条件页：原生 q1/n1 的 switch 不认识我们的 key，这里直接打开地址选择页
         Class<?> fragment = XposedHelpers.findClass(ConditionHookSupport.CLASS_ADD_CONDITION_FRAGMENT, cl);
-        Method onConditionClick = HookUtils.findMethod(fragment, "q1", void.class, taskItem);
+        Method onConditionClick = HookUtils.findMethod(fragment, new String[]{"q1", "n1"},
+                void.class, taskItem);
         if (onConditionClick != null) {
             XposedBridge.hookMethod(onConditionClick, new XC_MethodHook() {
                 @Override
@@ -83,7 +84,7 @@ final class GeofenceConditionHook {
                 }
             });
         } else {
-            XposedBridge.log(TAG + ": AddConditionFragment.q1 未找到，地理围栏无法从列表添加");
+            XposedBridge.log(TAG + ": AddConditionFragment.q1/n1 未找到，地理围栏无法从列表添加");
         }
 
         // 打开地址选择页之前先问半径；确定后带标记再走一遍原方法
@@ -118,11 +119,12 @@ final class GeofenceConditionHook {
 
     private static void hookRadius(ClassLoader cl) {
         Class<?> miGeofence = XposedHelpers.findClass(CLASS_MI_GEOFENCE, cl);
-        final Class<?> engine = XposedHelpers.findClass(ConditionHookSupport.CLASS_ENGINE, cl);
+        final Class<?> engine = TargetResolver.engine(cl);
         final Method singleton = findSingleton(engine);
-        final Method lookup = HookUtils.findMethod(engine, "l0", XposedHelpers.findClass(CLASS_ADDRESS_ITEM, cl), String.class);
+        final Method lookup = HookUtils.findMethod(engine, new String[]{"l0", "q0"},
+                XposedHelpers.findClass(CLASS_ADDRESS_ITEM, cl), String.class);
         if (singleton == null || lookup == null) {
-            XposedBridge.log(TAG + ": b2.j.z0/l0 未找到，地理围栏半径固定为 500 米");
+            XposedBridge.log(TAG + ": 引擎单例或 l0/q0 未找到，地理围栏半径固定为 500 米");
             return;
         }
 
@@ -151,25 +153,8 @@ final class GeofenceConditionHook {
         });
     }
 
-    /** public static j z0()：引擎单例 */
+    /** public static j z0() / A0() / F0()：引擎单例 */
     private static Method findSingleton(Class<?> engine) {
-        try {
-            Method m = engine.getDeclaredMethod("z0");
-            if (m.getReturnType() == engine && Modifier.isStatic(m.getModifiers())) {
-                m.setAccessible(true);
-                return m;
-            }
-        } catch (NoSuchMethodException ignored) {
-            // fall through
-        }
-        for (Method m : engine.getDeclaredMethods()) {
-            if (Modifier.isStatic(m.getModifiers()) && m.getReturnType() == engine
-                    && m.getParameterTypes().length == 0 && !m.isSynthetic()) {
-                m.setAccessible(true);
-                XposedBridge.log(TAG + ": b2.j.z0 改名为 " + m.getName());
-                return m;
-            }
-        }
-        return null;
+        return HookUtils.findMethod(engine, new String[]{"z0", "A0", "F0"}, engine);
     }
 }

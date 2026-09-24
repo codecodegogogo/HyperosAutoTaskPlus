@@ -45,7 +45,7 @@ final class DeviceActionResultHook {
     }
 
     private static void hookFactory(ClassLoader cl) {
-        Class<?> m0 = XposedHelpers.findClass(ConditionHookSupport.CLASS_M0, cl);
+        Class<?> m0 = TargetResolver.factory(cl);
         // 和新增条件共用 key -> Class / 实例的工厂拦截。
         ConditionHookSupport.hookFactory(cl, RUNTIME, FirstAppKeys::isDeviceActionKey);
         XposedHelpers.findAndHookMethod(m0, "A", Context.class, new XC_MethodHook() {
@@ -65,8 +65,11 @@ final class DeviceActionResultHook {
 
     private static void hookAdd(ClassLoader cl, Class<?> item) {
         Class<?> fragment = XposedHelpers.findClass("com.miui.autotask.fragment.AddResultFragment", cl);
-        Method click = HookUtils.findMethod(fragment, "u2", void.class, item);
-        if (click == null) throw new IllegalStateException("AddResultFragment.u2 未找到");
+        Method click = HookUtils.findMethod(fragment, new String[]{"u2", "r2"}, void.class, item);
+        Method applyResult = HookUtils.findMethod(fragment, new String[]{"w0", "t0"}, void.class, item);
+        if (click == null || applyResult == null) {
+            throw new IllegalStateException("AddResultFragment.u2/r2 或 w0/t0 未找到");
+        }
         XposedBridge.hookMethod(click, new XC_MethodHook() {
             @Override
             protected void beforeHookedMethod(MethodHookParam param) {
@@ -76,11 +79,11 @@ final class DeviceActionResultHook {
                 Object self = param.thisObject;
                 Object activity = XposedHelpers.callMethod(self, "getActivity");
                 if (activity == null) return;
-                Runnable confirm = () -> XposedHelpers.callMethod(self, "w0", value);
+                Runnable confirm = () -> HookUtils.invokeMethod(applyResult, self, value);
                 XposedHelpers.callStaticMethod(runtime(), "pickAndApply", activity, value, confirm);
             }
         });
-        Method build = HookUtils.findMethod(fragment, "v1", void.class);
+        Method build = HookUtils.findMethod(fragment, new String[]{"v1", "s1"}, void.class);
         if (build != null) XposedBridge.hookMethod(build, new XC_MethodHook() {
             @Override
             protected void afterHookedMethod(MethodHookParam param) {
@@ -90,7 +93,7 @@ final class DeviceActionResultHook {
     }
 
     private static void hookEdit(ClassLoader cl, Class<?> item) {
-        Class<?> k0 = XposedHelpers.findClass(ConditionHookSupport.CLASS_K0, cl);
+        Class<?> k0 = TargetResolver.editor(cl);
         // 使用现有的签名定位，避免把形状相似的条件编辑 F0 当成结果编辑。
         Method edit = InvisibleModeResultHook.findEditMethod(k0, item);
         if (edit == null) throw new IllegalStateException("K0.G0 未找到");

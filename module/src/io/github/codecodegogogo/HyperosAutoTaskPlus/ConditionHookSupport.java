@@ -31,9 +31,6 @@ final class ConditionHookSupport {
 
     private static final String TAG = MainHook.TAG;
 
-    static final String CLASS_M0 = "g2.M0";
-    static final String CLASS_K0 = "g2.K0";
-    static final String CLASS_ENGINE = "b2.j";
     static final String CLASS_TASK_ITEM = "com.miui.autotask.taskitem.TaskItem";
     static final String CLASS_ADD_CONDITION_FRAGMENT = "com.miui.autotask.fragment.AddConditionFragment";
 
@@ -57,7 +54,7 @@ final class ConditionHookSupport {
 
     /** M0.h(key) / M0.B(key)：key -> Class / 新实例 */
     static void hookFactory(ClassLoader cl, final String runtimeName, final KeyMatcher keys) {
-        Class<?> m0 = XposedHelpers.findClass(CLASS_M0, cl);
+        Class<?> m0 = TargetResolver.factory(cl);
 
         XposedHelpers.findAndHookMethod(m0, "h", String.class, new XC_MethodHook() {
             @Override
@@ -95,7 +92,7 @@ final class ConditionHookSupport {
      */
     static void hookCategory(ClassLoader cl, final String runtimeName, final String category,
                              final String anchorKey, final boolean requireAnchor, final String... insertKeys) {
-        Class<?> m0 = XposedHelpers.findClass(CLASS_M0, cl);
+        Class<?> m0 = TargetResolver.factory(cl);
         XposedHelpers.findAndHookMethod(m0, "j", new XC_MethodHook() {
             @Override
             @SuppressWarnings("unchecked")
@@ -130,7 +127,7 @@ final class ConditionHookSupport {
 
     /** M0.s(key)：退出条件对应的反向 key（用 FirstAppKeys.opposite） */
     static void hookOppositeKey(ClassLoader cl, final KeyMatcher keys) {
-        Class<?> m0 = XposedHelpers.findClass(CLASS_M0, cl);
+        Class<?> m0 = TargetResolver.factory(cl);
         XposedHelpers.findAndHookMethod(m0, "s", String.class, new XC_MethodHook() {
             @Override
             protected void beforeHookedMethod(MethodHookParam param) {
@@ -144,7 +141,7 @@ final class ConditionHookSupport {
 
     /** M0.t(item) / M0.e(item, list)：「退出时恢复」生成 / 同步退出条件 */
     static void hookOpposite(ClassLoader cl, Class<?> taskItem, final String runtimeName) {
-        Class<?> m0 = XposedHelpers.findClass(CLASS_M0, cl);
+        Class<?> m0 = TargetResolver.factory(cl);
 
         XposedHelpers.findAndHookMethod(m0, "t", taskItem, new XC_MethodHook() {
             @Override
@@ -168,12 +165,16 @@ final class ConditionHookSupport {
 
     // ------------------------------------------------------------------ 编辑对话框
 
-    /** AddConditionFragment.q1(item) 与 K0.F0(ctx,item,cb,pos)：都弹 Runtime.pickAndApply */
+    /** AddConditionFragment.q1/n1(item) 与 K0.F0(ctx,item,cb,pos)：都弹 Runtime.pickAndApply */
     static void hookDialogs(ClassLoader cl, Class<?> taskItem, final String runtimeName) {
         Class<?> fragment = XposedHelpers.findClass(CLASS_ADD_CONDITION_FRAGMENT, cl);
-        Method onConditionClick = HookUtils.findMethod(fragment, "q1", void.class, taskItem);
-        if (onConditionClick == null) {
-            XposedBridge.log(TAG + ": AddConditionFragment.q1 未找到，" + runtimeName + " 无法从列表添加");
+        Method onConditionClick = HookUtils.findMethod(fragment, new String[]{"q1", "n1"},
+                void.class, taskItem);
+        Method applyCondition = HookUtils.findMethod(fragment, new String[]{"w0", "t0"},
+                void.class, taskItem);
+        if (onConditionClick == null || applyCondition == null) {
+            XposedBridge.log(TAG + ": AddConditionFragment.q1/n1 或 w0/t0 未找到，"
+                    + runtimeName + " 无法从列表添加");
         } else {
             XposedBridge.hookMethod(onConditionClick, new XC_MethodHook() {
                 @Override
@@ -188,13 +189,13 @@ final class ConditionHookSupport {
                         return;
                     }
                     final Object self = param.thisObject;
-                    Runnable onConfirm = () -> XposedHelpers.callMethod(self, "w0", item);
+                    Runnable onConfirm = () -> HookUtils.invokeMethod(applyCondition, self, item);
                     XposedHelpers.callStaticMethod(runtime(runtimeName), "pickAndApply", activity, item, onConfirm);
                 }
             });
         }
 
-        Class<?> k0 = XposedHelpers.findClass(CLASS_K0, cl);
+        Class<?> k0 = TargetResolver.editor(cl);
         Method editClick = findEditMethod(k0, taskItem);
         if (editClick == null) {
             XposedBridge.log(TAG + ": K0.F0 未找到，" + runtimeName + " 在任务编辑页里不能再次修改");
@@ -263,9 +264,9 @@ final class ConditionHookSupport {
 
     // ------------------------------------------------------------------ 引擎 b2.j
 
-    /** b2.j.<init> / p(item) / b1(uuid, list)：引擎就绪、任务启用、任务停用 */
+    /** 引擎 <init> / p(item) / b1|d1(uuid, list)：引擎就绪、任务启用、任务停用 */
     static void hookEngine(ClassLoader cl, Class<?> taskItem, final String runtimeName) {
-        Class<?> engine = XposedHelpers.findClass(CLASS_ENGINE, cl);
+        Class<?> engine = TargetResolver.engine(cl);
 
         XposedBridge.hookAllConstructors(engine, new XC_MethodHook() {
             @Override
@@ -285,8 +286,10 @@ final class ConditionHookSupport {
             }
         });
 
-        Method register = HookUtils.findMethod(engine, "p", void.class, taskItem);
-        Method unregister = HookUtils.findMethod(engine, "b1", void.class, String.class, List.class);
+        Method register = HookUtils.findMethod(engine, new String[]{"p", "t"},
+                void.class, taskItem);
+        Method unregister = HookUtils.findMethod(engine, new String[]{"b1", "d1", "o1"},
+                void.class, String.class, List.class);
         if (register == null || unregister == null) {
             XposedBridge.log(TAG + ": b2.j 的注册/反注册方法未找到，" + runtimeName + " 不会被引擎触发");
             return;

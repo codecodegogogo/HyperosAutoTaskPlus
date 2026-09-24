@@ -32,13 +32,11 @@ final class UnlockAppResultHook {
 
     private static final String TAG = MainHook.TAG;
 
-    private static final String CLASS_M0 = "g2.M0";
-
     private UnlockAppResultHook() {
     }
 
     static void install(XC_LoadPackage.LoadPackageParam lpparam) {
-        Class<?> m0 = XposedHelpers.findClass(CLASS_M0, lpparam.classLoader);
+        Class<?> m0 = TargetResolver.factory(lpparam.classLoader);
         Method target = findConflictMethod(m0);
 
         if (target == null) {

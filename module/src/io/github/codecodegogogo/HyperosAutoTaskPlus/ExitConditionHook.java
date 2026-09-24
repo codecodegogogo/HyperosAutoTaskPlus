@@ -26,14 +26,14 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
  * 所以放开的只是界面：
  *
  *   NewTaskFragment.onCreatePreferences   退出列表打开「添加」行和删除按钮，分类常驻显示
- *   NewTaskFragment.M0(int)               退出条件数量变化时不再隐藏分类 / 取消勾选
+ *   NewTaskFragment.M0/J0(int)            退出条件数量变化时不再隐藏分类 / 取消勾选
  *   NewTaskFragment.onActivityResult      requestCode 106：从「添加条件」页选回来的项直接进退出列表
  *   RecyclerViewPreference$a.onItemClick  退出列表里点「添加」行 -> 打开添加条件页（106）；
  *                                         点已有项 -> 借用触发列表的编辑分发（临时把 h 置 false）
  *   RecyclerViewPreference.B(int,int,Intent)
  *                                         102：触发条件新增时仍自动加反向条件，但要插在「添加」行之前；
  *                                         104/105：退出项自己编辑回来的结果替换原位置
- *   Y1.v.o(holder,int)                    「添加」行不显示勾选框和删除；只剩一条退出条件时不显示勾选框
+ *   列表适配器.o/m(holder,int)              「添加」行不显示勾选框和删除；只剩一条退出条件时不显示勾选框
  *
  * 退出条件之间是「或」：勾选的任一条件满足即退出（原生文案「满足以下选中的任一条件则自动退出任务」）。
  * 「自定义时间」作为退出条件引擎不会设闹钟，添加页里把它禁掉。
@@ -45,8 +45,6 @@ final class ExitConditionHook {
     private static final String CLASS_NEW_TASK_FRAGMENT = "com.miui.autotask.fragment.NewTaskFragment";
     private static final String CLASS_RECYCLER_PREF = "com.miui.autotask.view.RecyclerViewPreference";
     private static final String CLASS_RECYCLER_PREF_LISTENER = "com.miui.autotask.view.RecyclerViewPreference$a";
-    private static final String CLASS_ADAPTER = "Y1.v";
-    private static final String CLASS_ADAPTER_HOLDER = "Y1.v$c";
     private static final String CLASS_TASK_ITEM = "com.miui.autotask.taskitem.TaskItem";
     private static final String CLASS_DEFAULT_TASK_ITEM = "com.miui.autotask.taskitem.DefaultTaskItem";
     private static final String CLASS_ADD_BASE_ACTIVITY = "com.miui.autotask.activity.AddBaseActivity";
@@ -97,15 +95,13 @@ final class ExitConditionHook {
                     }
                 });
 
-        // private synthetic void M0(int)：退出条件数量变化。原生数量为 0 时隐藏分类并取消勾选，
-        // 这会把刚删光准备重加的用户挡在外面，改成只更新摘要
-        Method onExitCountChanged = null;
-        try {
-            onExitCountChanged = fragment.getDeclaredMethod("M0", int.class);
-        } catch (NoSuchMethodException ignored) {
-            // fall through
-        }
-        if (onExitCountChanged != null) {
+        // private synthetic void M0/J0(int)：退出条件数量变化。13.5/13.6 中 M0 已被其它回调占用，
+        // 优先用 J0；原生数量为 0 时隐藏分类并取消勾选，这里改成只更新摘要。
+        Method onExitCountChanged = HookUtils.findMethod(fragment,
+                new String[]{"J0", "M0"}, void.class, int.class);
+        Method summaryUpdate = HookUtils.findMethod(fragment,
+                new String[]{"Q0", "T0"}, void.class, int.class);
+        if (onExitCountChanged != null && summaryUpdate != null) {
             XposedBridge.hookMethod(onExitCountChanged, new XC_MethodHook() {
                 @Override
                 protected void beforeHookedMethod(MethodHookParam param) {
@@ -113,12 +109,12 @@ final class ExitConditionHook {
                     if (category != null) {
                         XposedHelpers.callMethod(category, "setVisible", true);
                     }
-                    XposedHelpers.callMethod(param.thisObject, "T0", param.args[0]);
+                    XposedHelpers.callMethod(param.thisObject, summaryUpdate.getName(), param.args[0]);
                     param.setResult(null);
                 }
             });
         } else {
-            XposedBridge.log(TAG + ": NewTaskFragment.M0(int) 未找到，删光退出条件后分类会被隐藏");
+            XposedBridge.log(TAG + ": NewTaskFragment.J0/M0 或 Q0/T0(int) 未找到，删光退出条件后分类会被隐藏");
         }
 
         // 从「添加条件」页选回来的退出条件：直接进退出列表，勾选为启用
@@ -151,6 +147,11 @@ final class ExitConditionHook {
         final Class<?> defaultItem = XposedHelpers.findClass(CLASS_DEFAULT_TASK_ITEM, cl);
         final Class<?> addBaseActivity = XposedHelpers.findClass(CLASS_ADD_BASE_ACTIVITY, cl);
         final Class<?> addConditionActivity = XposedHelpers.findClass(CLASS_ADD_CONDITION_ACTIVITY, cl);
+        final Method openAdd = HookUtils.findMethod(addBaseActivity, new String[]{"L0", "M0", "z0"},
+                void.class, Activity.class, ArrayList.class, int.class, Class.class);
+        if (openAdd == null) {
+            XposedBridge.log(TAG + ": AddBaseActivity.L0/M0/z0 未找到，退出列表无法打开「添加条件」页");
+        }
 
         // 列表项点击
         XposedHelpers.findAndHookMethod(listener, "onItemClick", int.class, new XC_MethodHook() {
@@ -183,8 +184,15 @@ final class ExitConditionHook {
                     }
                     unable.add(KEY_CUSTOM_TIME_CONDITION);
                     unable.add(FirstAppKeys.KEY_INTERVAL_CONDITION);
-                    XposedHelpers.callStaticMethod(addBaseActivity, "L0",
-                            activity, unable, REQUEST_ADD_EXIT_CONDITION, addConditionActivity);
+                    if (openAdd == null) {
+                        return;
+                    }
+                    try {
+                        openAdd.invoke(null, activity, unable, REQUEST_ADD_EXIT_CONDITION, addConditionActivity);
+                    } catch (Throwable t) {
+                        XposedBridge.log(TAG + ": 打开退出条件添加页失败");
+                        XposedBridge.log(t);
+                    }
                     return;
                 }
                 // 已有项：借触发列表那套编辑分发（选应用页 / 各类对话框），临时把 h 置 false，
@@ -231,7 +239,7 @@ final class ExitConditionHook {
                     // 触发条件新增 -> 自动加反向条件。原生只在没有「添加」行时这么做，这里自己来
                     param.setResult(null);
                     Object opposite = XposedHelpers.callStaticMethod(
-                            XposedHelpers.findClass("g2.M0", cl), "t", extra);
+                            TargetResolver.factory(cl), "t", extra);
                     if (opposite == null) {
                         return;
                     }
@@ -264,14 +272,15 @@ final class ExitConditionHook {
     // ------------------------------------------------------------------ 列表适配器 Y1.v
 
     private static void hookAdapter(ClassLoader cl) {
-        Class<?> adapter = XposedHelpers.findClass(CLASS_ADAPTER, cl);
-        Class<?> holder = XposedHelpers.findClass(CLASS_ADAPTER_HOLDER, cl);
+        Class<?> adapter = TargetResolver.adapter(cl);
+        Class<?> holder = TargetResolver.adapterHolder(cl);
         final Class<?> defaultItem = XposedHelpers.findClass(CLASS_DEFAULT_TASK_ITEM, cl);
 
-        // public void o(v$c holder, int position)：真正的 onBindViewHolder
-        Method bind = HookUtils.findMethod(adapter, "o", void.class, holder, int.class);
+        // public void o/m(v$c holder, int position)：真正的 onBindViewHolder
+        Method bind = HookUtils.findMethod(adapter, new String[]{"o", "m", "onBindViewHolder"},
+                void.class, holder, int.class);
         if (bind == null) {
-            XposedBridge.log(TAG + ": Y1.v 的 onBindViewHolder 未找到，退出列表「添加」行会带勾选框");
+            XposedBridge.log(TAG + ": 适配器的 onBindViewHolder 未找到，退出列表「添加」行会带勾选框");
             return;
         }
         XposedBridge.hookMethod(bind, new XC_MethodHook() {

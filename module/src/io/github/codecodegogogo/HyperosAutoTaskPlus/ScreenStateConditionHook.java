@@ -33,9 +33,6 @@ final class ScreenStateConditionHook {
 
     private static final String TAG = MainHook.TAG;
 
-    private static final String CLASS_M0 = "g2.M0";
-    private static final String CLASS_K0 = "g2.K0";
-    private static final String CLASS_ENGINE = "b2.j";
     private static final String CLASS_TASK_ITEM = "com.miui.autotask.taskitem.TaskItem";
     private static final String CLASS_ADD_CONDITION_FRAGMENT = "com.miui.autotask.fragment.AddConditionFragment";
 
@@ -55,7 +52,7 @@ final class ScreenStateConditionHook {
     // ------------------------------------------------------------------ g2.M0
 
     private static void hookM0(ClassLoader cl, Class<?> taskItem) {
-        Class<?> m0 = XposedHelpers.findClass(CLASS_M0, cl);
+        Class<?> m0 = TargetResolver.factory(cl);
 
         XposedHelpers.findAndHookMethod(m0, "h", String.class, new XC_MethodHook() {
             @Override
@@ -123,9 +120,12 @@ final class ScreenStateConditionHook {
 
     private static void hookAddConditionFragment(ClassLoader cl, Class<?> taskItem) {
         Class<?> fragment = XposedHelpers.findClass(CLASS_ADD_CONDITION_FRAGMENT, cl);
-        Method onConditionClick = HookUtils.findMethod(fragment, "q1", void.class, taskItem);
-        if (onConditionClick == null) {
-            XposedBridge.log(TAG + ": AddConditionFragment.q1 未找到，屏幕状态无法从列表添加");
+        Method onConditionClick = HookUtils.findMethod(fragment, new String[]{"q1", "n1"},
+                void.class, taskItem);
+        Method applyCondition = HookUtils.findMethod(fragment, new String[]{"w0", "t0"},
+                void.class, taskItem);
+        if (onConditionClick == null || applyCondition == null) {
+            XposedBridge.log(TAG + ": AddConditionFragment.q1/n1 或 w0/t0 未找到，屏幕状态无法从列表添加");
             return;
         }
 
@@ -142,7 +142,7 @@ final class ScreenStateConditionHook {
                     return;
                 }
                 final Object self = param.thisObject;
-                Runnable onConfirm = () -> XposedHelpers.callMethod(self, "w0", item);
+                Runnable onConfirm = () -> HookUtils.invokeMethod(applyCondition, self, item);
                 XposedHelpers.callStaticMethod(runtime(), "pickAndApply", activity, item, onConfirm);
             }
         });
@@ -151,7 +151,7 @@ final class ScreenStateConditionHook {
     // ------------------------------------------------------------------ 任务编辑页
 
     private static void hookEditDialog(ClassLoader cl, Class<?> taskItem) {
-        Class<?> k0 = XposedHelpers.findClass(CLASS_K0, cl);
+        Class<?> k0 = TargetResolver.editor(cl);
         Method editClick = findEditMethod(k0, taskItem);
         if (editClick == null) {
             XposedBridge.log(TAG + ": K0.F0 未找到，屏幕状态在任务编辑页里不能再次修改（删掉重加仍可用）");
@@ -222,7 +222,7 @@ final class ScreenStateConditionHook {
     // ------------------------------------------------------------------ 引擎 b2.j
 
     private static void hookEngine(ClassLoader cl, Class<?> taskItem) {
-        Class<?> engine = XposedHelpers.findClass(CLASS_ENGINE, cl);
+        Class<?> engine = TargetResolver.engine(cl);
 
         XposedBridge.hookAllConstructors(engine, new XC_MethodHook() {
             @Override
@@ -242,8 +242,10 @@ final class ScreenStateConditionHook {
             }
         });
 
-        Method register = HookUtils.findMethod(engine, "p", void.class, taskItem);
-        Method unregister = HookUtils.findMethod(engine, "b1", void.class, String.class, List.class);
+        Method register = HookUtils.findMethod(engine, new String[]{"p", "t"},
+                void.class, taskItem);
+        Method unregister = HookUtils.findMethod(engine, new String[]{"b1", "d1", "o1"},
+                void.class, String.class, List.class);
         if (register == null || unregister == null) {
             XposedBridge.log(TAG + ": b2.j 的注册/反注册方法未找到，屏幕状态条件不会被引擎触发");
             return;
