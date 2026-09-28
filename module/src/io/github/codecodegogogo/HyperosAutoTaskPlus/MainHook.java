@@ -104,6 +104,13 @@ public class MainHook implements IXposedHookLoadPackage {
             XposedBridge.log(t);
         }
 
+        try {
+            ActionChainResultHook.install(lpparam);
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": 「动作链」结果 hook 失败");
+            XposedBridge.log(t);
+        }
+
         HookUtils.step("unlock failure condition", () -> UnlockFailureConditionHook.install(lpparam));
     }
 }
