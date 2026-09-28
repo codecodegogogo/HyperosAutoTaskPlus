@@ -33,6 +33,14 @@ public class AlertDialog extends android.app.Dialog {
             throw new RuntimeException("stub");
         }
 
+        public Builder setItems(CharSequence[] items, DialogInterface.OnClickListener listener) {
+            throw new RuntimeException("stub");
+        }
+
+        public Builder setMessage(CharSequence message) {
+            throw new RuntimeException("stub");
+        }
+
         public Builder setMultiChoiceItems(CharSequence[] items, boolean[] checkedItems,
                                            DialogInterface.OnMultiChoiceClickListener listener) {
             throw new RuntimeException("stub");
@@ -46,7 +54,15 @@ public class AlertDialog extends android.app.Dialog {
             throw new RuntimeException("stub");
         }
 
+        public Builder setPositiveButton(CharSequence text, DialogInterface.OnClickListener listener) {
+            throw new RuntimeException("stub");
+        }
+
         public Builder setNegativeButton(int textId, DialogInterface.OnClickListener listener) {
+            throw new RuntimeException("stub");
+        }
+
+        public Builder setNegativeButton(CharSequence text, DialogInterface.OnClickListener listener) {
             throw new RuntimeException("stub");
         }
 
