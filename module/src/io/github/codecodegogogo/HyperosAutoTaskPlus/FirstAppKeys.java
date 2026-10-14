@@ -35,6 +35,8 @@ public final class FirstAppKeys {
     public static final String KEY_NOTIFICATION_RESULT = "key_notification_result_item";
     /** 动作链结果：回放录制好的一串触摸动作，参数只存动作库里的 chainId 引用。 */
     public static final String KEY_ACTION_CHAIN_RESULT = "key_action_chain_result_item";
+    /** 保存按顺序延迟执行的分组，不出现在普通的结果选择列表中。 */
+    public static final String KEY_THEN_EXECUTION_RESULT = "key_then_execution_result_item";
     public static final String CATEGORY_RESULT_FUNCTION = "key_function_result_category";
 
     /** 屏幕状态条件：亮屏 / 息屏持续了指定时长 */
@@ -93,6 +95,10 @@ public final class FirstAppKeys {
 
     public static boolean isActionChainKey(String key) {
         return KEY_ACTION_CHAIN_RESULT.equals(key);
+    }
+
+    public static boolean isThenExecutionKey(String key) {
+        return KEY_THEN_EXECUTION_RESULT.equals(key);
     }
 
     public static boolean isScreenStateKey(String key) {
