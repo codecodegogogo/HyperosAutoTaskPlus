@@ -1,5 +1,6 @@
 /# ---- 构建产物 ----
 build/out/
+build/then-*-check/
 module/build/
 
 # ---- 签名密钥（私钥，不上传；第一次构建会自动重新生成）----
@@ -12,6 +13,8 @@ build/*.keystore
 jadx_out/
 smali_out/
 out_res/
+build/inspect*/
+build/res*/
 
 # ---- build/libs 的重复拷贝，构建脚本只用 build/libs ----
 module/libs/

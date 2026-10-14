@@ -35,3 +35,5 @@ if ($LASTEXITCODE -ne 0) { throw '邮件协议回归测试失败' }
 if ($LASTEXITCODE -ne 0) { throw '解锁失败条件回归测试失败' }
 & "$jdkPath\java.exe" -cp "$testPath;$testClasspath" io.github.codecodegogogo.HyperosAutoTaskPlus.inject.ActionChainTest
 if ($LASTEXITCODE -ne 0) { throw '动作链回归测试失败' }
+& "$jdkPath\java.exe" -cp "$testPath;$testClasspath" io.github.codecodegogogo.HyperosAutoTaskPlus.inject.ThenExecutionTest
+if ($LASTEXITCODE -ne 0) { throw '再执行回归测试失败' }

@@ -107,17 +107,19 @@ final class ActionChainStore {
             database = SQLiteDatabase.openDatabase(db.getPath(), null, SQLiteDatabase.OPEN_READONLY);
             List<String> uuids = new ArrayList<>();
             Cursor cursor = database.rawQuery(
-                    "SELECT task_uuid, condition_result_json FROM task_condition_and_result_table"
-                            + " WHERE condition_result_key = ?",
-                    new String[]{FirstAppKeys.KEY_ACTION_CHAIN_RESULT});
+                    "SELECT task_uuid, condition_result_key, condition_result_json FROM task_condition_and_result_table"
+                            + " WHERE condition_result_key IN (?, ?)",
+                    new String[]{FirstAppKeys.KEY_ACTION_CHAIN_RESULT, FirstAppKeys.KEY_THEN_EXECUTION_RESULT});
             try {
                 while (cursor.moveToNext()) {
-                    String json = cursor.getString(1);
-                    if (json == null) continue;
-                    Matcher m = CHAIN_ID.matcher(json);
-                    if (m.find() && chainId.equals(m.group(1))) {
-                        String uuid = cursor.getString(0);
-                        if (uuid != null && !uuids.contains(uuid)) uuids.add(uuid);
+                    try {
+                        if (usesChain(cursor.getString(1), cursor.getString(2), chainId)) {
+                            String uuid = cursor.getString(0);
+                            if (uuid != null && !uuids.contains(uuid)) uuids.add(uuid);
+                        }
+                    } catch (RuntimeException e) {
+                        // 一个损坏任务不能让后面的有效引用消失。
+                        Log.w(DeviceActionRuntime.TAG, "read action chain reference failed", e);
                     }
                 }
             } finally { cursor.close(); }
@@ -132,6 +134,25 @@ final class ActionChainStore {
             if (database != null) try { database.close(); } catch (Throwable ignored) {}
         }
         return titles;
+    }
+
+    /** 延迟分组中的动作链仍算作任务引用，删除动作库项目时不能漏掉。 */
+    static boolean usesChain(String key, String json, String chainId) {
+        if (json == null || chainId == null || chainId.isEmpty()) return false;
+        if (FirstAppKeys.KEY_ACTION_CHAIN_RESULT.equals(key)) {
+            Matcher match = CHAIN_ID.matcher(json);
+            return match.find() && chainId.equals(match.group(1));
+        }
+        if (!FirstAppKeys.KEY_THEN_EXECUTION_RESULT.equals(key)) return false;
+        ThenResultItem plan = ThenActionCodec.readPlan(json);
+        for (ThenGroup group : plan.getGroups()) {
+            if (group == null) continue;
+            for (ThenAction action : group.getActions()) {
+                if (action != null && FirstAppKeys.KEY_ACTION_CHAIN_RESULT.equals(action.getKey())
+                        && usesChain(action.getKey(), action.getJson(), chainId)) return true;
+            }
+        }
+        return false;
     }
 
     /** 排队通知用：按任务 uuid 取任务标题，取不到返回 null。 */

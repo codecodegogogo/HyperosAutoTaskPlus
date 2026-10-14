@@ -53,10 +53,10 @@ final class Alarms {
     }
 
     /** 在 elapsedRealtime 到达 dueElapsed 时执行 onAlarm；调用方自己做同步 */
-    void set(final String tag, long dueElapsed, final Runnable onAlarm) {
+    boolean set(final String tag, long dueElapsed, final Runnable onAlarm) {
         cancel(tag);
         if (!ready()) {
-            return;
+            return false;
         }
         final Object[] self = new Object[1];
         final Object listener = newListener(new Runnable() {
@@ -73,13 +73,18 @@ final class Alarms {
             }
         });
         self[0] = listener;
+        synchronized (this) {
+            listeners.put(tag, listener);
+        }
         try {
             setExact.invoke(alarm, AlarmManager.ELAPSED_REALTIME_WAKEUP, dueElapsed, prefix + tag, listener, handler);
-            synchronized (this) {
-                listeners.put(tag, listener);
-            }
+            return true;
         } catch (Throwable t) {
+            synchronized (this) {
+                if (listeners.get(tag) == listener) listeners.remove(tag);
+            }
             Log.e(TAG, "set alarm failed: " + tag, t);
+            return false;
         }
     }
 
