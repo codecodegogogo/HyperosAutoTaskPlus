@@ -76,6 +76,13 @@ final class ExitConditionHook {
         final Class<?> fragment = XposedHelpers.findClass(CLASS_NEW_TASK_FRAGMENT, cl);
         final Class<?> defaultItem = XposedHelpers.findClass(CLASS_DEFAULT_TASK_ITEM, cl);
 
+        // private synthetic void M0/J0(int)：退出条件数量变化。13.5/13.6 中 M0 已被其它回调占用，
+        // 优先用 J0；原生数量为 0 时隐藏分类并取消勾选，这里改成只更新摘要。
+        final Method onExitCountChanged = HookUtils.findMethod(fragment,
+                new String[]{"J0", "M0"}, void.class, int.class);
+        final Method summaryUpdate = HookUtils.findMethod(fragment,
+                new String[]{"Q0", "T0"}, void.class, int.class);
+
         XposedHelpers.findAndHookMethod(fragment, "onCreatePreferences", android.os.Bundle.class, String.class,
                 new XC_MethodHook() {
                     @Override
@@ -92,25 +99,36 @@ final class ExitConditionHook {
                         if (category != null) {
                             XposedHelpers.callMethod(category, "setVisible", true);
                         }
+                        // 新建任务时原生不会初始化「设置退出条件」的摘要（null）。退出列表为空时，
+                        // 第一次布局里 onBindViewHolder 补「添加」行会回调数量变化，摘要从 null 变 ""
+                        // 触发 notifyItemChanged，RecyclerView 正在布局 -> IllegalStateException 闪退。
+                        // 这里先按当前数量把摘要定下来，布局期间的回调就不会再改变它
+                        if (summaryUpdate != null) {
+                            updateSummary(param.thisObject, summaryUpdate,
+                                    realItemCount(exitList, defaultItem));
+                        }
                     }
                 });
 
-        // private synthetic void M0/J0(int)：退出条件数量变化。13.5/13.6 中 M0 已被其它回调占用，
-        // 优先用 J0；原生数量为 0 时隐藏分类并取消勾选，这里改成只更新摘要。
-        Method onExitCountChanged = HookUtils.findMethod(fragment,
-                new String[]{"J0", "M0"}, void.class, int.class);
-        Method summaryUpdate = HookUtils.findMethod(fragment,
-                new String[]{"Q0", "T0"}, void.class, int.class);
         if (onExitCountChanged != null && summaryUpdate != null) {
             XposedBridge.hookMethod(onExitCountChanged, new XC_MethodHook() {
                 @Override
                 protected void beforeHookedMethod(MethodHookParam param) {
-                    Object category = XposedHelpers.getObjectField(param.thisObject, "q");
+                    param.setResult(null);
+                    final Object self = param.thisObject;
+                    final Object count = param.args[0];
+                    Object category = XposedHelpers.getObjectField(self, "q");
                     if (category != null) {
                         XposedHelpers.callMethod(category, "setVisible", true);
                     }
-                    XposedHelpers.callMethod(param.thisObject, summaryUpdate.getName(), param.args[0]);
-                    param.setResult(null);
+                    // 这个回调可能在退出列表 onBindViewHolder 里触发（补「添加」行时），
+                    // 此时改摘要会让外层 RecyclerView 在布局中 notifyItemChanged 而崩溃，推迟到布局之后
+                    View list = listView(self);
+                    if (list != null && isComputingLayout(list)) {
+                        list.post(() -> updateSummary(self, summaryUpdate, count));
+                    } else {
+                        updateSummary(self, summaryUpdate, count);
+                    }
                 }
             });
         } else {
@@ -327,6 +345,48 @@ final class ExitConditionHook {
     }
 
     // ------------------------------------------------------------------ 工具
+
+    /** 不含末尾「添加」行的退出条件条数（列表刚打开 G(true) 时「添加」行可能还没补上） */
+    private static int realItemCount(Object recyclerPref, Class<?> defaultItem) {
+        List<Object> items = itemList(recyclerPref);
+        if (items == null) {
+            return 0;
+        }
+        int count = 0;
+        for (Object item : items) {
+            if (!defaultItem.isInstance(item)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private static void updateSummary(Object fragment, Method summaryUpdate, Object count) {
+        try {
+            HookUtils.invokeMethod(summaryUpdate, fragment, count);
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": 更新退出条件摘要失败: " + t);
+        }
+    }
+
+    /** PreferenceFragmentCompat.getListView()，视图未创建时为 null */
+    private static View listView(Object fragment) {
+        try {
+            Object v = XposedHelpers.callMethod(fragment, "getListView");
+            return v instanceof View ? (View) v : null;
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /** RecyclerView.isComputingLayout()；取不到时按「正在布局」处理，走 post 更稳妥 */
+    private static boolean isComputingLayout(View recyclerView) {
+        try {
+            return (Boolean) XposedHelpers.callMethod(recyclerView, "isComputingLayout");
+        } catch (Throwable t) {
+            return true;
+        }
+    }
 
     @SuppressWarnings("unchecked")
     private static List<Object> itemList(Object recyclerPref) {
