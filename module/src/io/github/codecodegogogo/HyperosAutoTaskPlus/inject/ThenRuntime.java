@@ -88,6 +88,7 @@ public final class ThenRuntime {
                 if (!item.hasGroups()) return;
                 if (!item.l()) throw new IllegalArgumentException("再执行配置不完整");
                 List<PreparedGroup> groups = prepare(item, uuid);
+                if (groups.isEmpty()) return; // 全部分组都停用：这次触发静默结束
                 State state = stateFor(item);
                 boolean restoreOnExit = expectsRestore(taskBeans.get(uuid));
                 if (!restoreOnExit) {
@@ -205,6 +206,9 @@ public final class ThenRuntime {
     public static String summary(ThenResultItem item) {
         if (item == null || !item.hasGroups()) return title();
         List<ThenGroup> groups = item.getGroups();
+        int enabled = 0;
+        for (ThenGroup group : groups) if (group != null && group.isEnabled()) enabled++;
+        if (enabled == 0) return title() + DeviceActionRuntime.text("：全部停用", ": all disabled");
         if (groups.size() == 1 && groups.get(0) != null) {
             ThenGroup group = groups.get(0);
             String unit = group.getDelayUnit() == ThenGroup.UNIT_MINUTES
@@ -212,7 +216,9 @@ public final class ThenRuntime {
             return group.getDelayAmount() + " " + unit
                     + DeviceActionRuntime.text("后再执行", " later");
         }
-        return title() + " " + groups.size() + DeviceActionRuntime.text(" 组", " groups");
+        String suffix = enabled == groups.size() ? ""
+                : DeviceActionRuntime.text("（其余停用）", " (others disabled)");
+        return title() + " " + enabled + DeviceActionRuntime.text(" 组", " groups") + suffix;
     }
 
     public static int icon(int which) {
@@ -224,6 +230,7 @@ public final class ThenRuntime {
         List<PreparedGroup> result = new ArrayList<>();
         for (ThenGroup group : item.getGroups()) {
             if (group == null || !group.isValid()) throw new IllegalArgumentException("再执行分组无效");
+            if (!group.isEnabled()) continue; // 停用的分组保留在计划里但不执行
             List<TaskItem> actions = ThenActionCodec.decodeAll(group.getActions());
             if (actions.isEmpty()) throw new IllegalArgumentException("再执行分组没有执行项目");
             for (TaskItem action : actions) {
@@ -398,6 +405,7 @@ public final class ThenRuntime {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         for (ThenGroup group : item.getGroups()) {
             digestField(digest, group.getId());
+            digestField(digest, group.isEnabled() ? "1" : "0");
             digestField(digest, String.valueOf(group.getDelayAmount()));
             digestField(digest, String.valueOf(group.getDelayUnit()));
             digestField(digest, String.valueOf(group.getActions().size()));

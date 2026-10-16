@@ -52,6 +52,10 @@ public final class ThenEditorSupport {
         group(value).setActions(actions);
     }
 
+    public static void setGroupEnabled(Object value, boolean enabled) {
+        group(value).setEnabled(enabled);
+    }
+
     public static void setGroups(Object value, List<?> groups) {
         if (groups == null) throw new IllegalArgumentException("再执行分组缺失");
         List<ThenGroup> checked = new ArrayList<>();
@@ -75,12 +79,16 @@ public final class ThenEditorSupport {
             ThenGroup group = groups.get(i);
             String prefix = "再执行 " + (i + 1) + "：";
             if (group == null) return prefix + "配置损坏，请删除后重新添加";
-            if (group.getActions().isEmpty()) return prefix + "请至少添加一个执行项目，或删除本组";
+            if (!group.isEnabled()) {
+                if (!group.isValid() || !ids.add(group.getId())) return prefix + "配置无效，请检查等待时长";
+                continue;
+            }
+            if (group.getActions().isEmpty()) return prefix + "请至少添加一个执行项目，或关闭本组开关";
             if (!group.isValid() || !ids.add(group.getId())) return prefix + "配置无效，请检查等待时长";
             try {
                 ThenActionCodec.decodeAll(group.getActions());
             } catch (RuntimeException e) {
-                return prefix + "有不可用的执行项目，请重新配置或删除";
+                return prefix + "有不可用的执行项目，请重新配置或关闭本组开关";
             }
         }
         return plan.l() ? "" : "再执行配置版本不可用，请重新添加";
