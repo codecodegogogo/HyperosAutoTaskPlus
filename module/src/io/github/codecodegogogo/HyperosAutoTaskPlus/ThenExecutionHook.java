@@ -39,13 +39,11 @@ final class ThenExecutionHook {
     private static final int REQUEST_ADD = 0x6A11;
     private static final int REQUEST_EDIT_APP = 0x6A12;
     private static final String SECTION_TITLE = "\u518d\u6267\u884c";
-    private static final String ARROW_ID = "arrow_right";
     private static final String CHECKBOX_WIDGET = "miuix_preference_widget_checkbox";
     private static final String HEADER_CLASS = "com.miui.permcenter.settings.model.FlexiblePreference";
     /** 「添加再执行」按钮变蓝后停留多久再回到灰色 */
     private static final long FLASH_MS = 500L;
 
-    private static volatile int sArrowId;
     private static volatile int sCheckboxWidgetId;
 
     private ThenExecutionHook() {}
@@ -126,13 +124,19 @@ final class ThenExecutionHook {
                     if (state == null || !state.ready || param.thisObject != state.add) return;
                     View view = itemView(param.args[0]);
                     if (view == null) return;
-                    // 添加行保留了 preference 级点击监听（行点击靠 androidx 的 performClick 桥），
-                    // 宿主后段按「有点击监听」把行末箭头设回可见，hideArrow 连透明度一起压掉才压得住
-                    hideArrow(view);
-                    view.post(() -> hideArrow(view));
                     bindAddSwitch(state, view);
                 }
             });
+            // 点添加行：androidx 绑定时给 itemView 挂的桥最终调 performClick()，这里截下来走开关的闪蓝添加
+            XposedHelpers.findAndHookMethod("androidx.preference.Preference", cl, "performClick",
+                    new XC_MethodHook() {
+                        @Override protected void beforeHookedMethod(MethodHookParam param) {
+                            State state = state(param.thisObject);
+                            if (state == null || !state.ready || param.thisObject != state.add) return;
+                            param.setResult(null);
+                            flashOrAdd(state);
+                        }
+                    });
         });
 
         HookUtils.step("再执行表头开关", () -> {
@@ -412,9 +416,9 @@ final class ThenExecutionHook {
                 "\u6dfb\u52a0\u518d\u6267\u884c");
         int switchWidget = checkboxWidgetId(activity);
         if (switchWidget != 0) XposedHelpers.callMethod(state.add, "setWidgetLayoutResource", switchWidget);
-        // 行点击走 preference 级监听：androidx 绑定开头会给 itemView 挂 performClick 桥，点行只会走这条桥；
-        // 行末箭头改由 hideArrow 连透明度一起压掉，宿主后段按「有点击监听」设回可见也看不见
-        click(state.add, () -> flashOrAdd(state));
+        // 不挂 preference 级点击监听：miuix 适配器按「有 intent / fragment / 点击监听」才显示行末箭头，
+        // 不挂就保持原生 GONE；点行由 Preference.performClick 钩子接管，改为闪一下行末开关再加一组
+        associate(state.add, STATE, state);
 
         // The hidden storage item is removed only inside a rollback-capable UI transaction.
         List<Object> originalItems = new ArrayList<>(rawItems(results));
@@ -850,14 +854,14 @@ final class ThenExecutionHook {
                         }
                         flashAdd(state, view, button);
                     });
-            // 不覆盖 itemView 的点击监听：androidx 的 performClick 桥要留着，点行的添加走 preference 级 click（见 attach）
+            // 不覆盖 itemView 的点击监听：androidx 的 performClick 桥要留着，点行的添加走 performClick 钩子（见 install）
         } catch (Throwable t) {
             XposedBridge.log(MainHook.TAG + ": delayed add switch unavailable");
             XposedBridge.log(t);
         }
     }
 
-    /** 点添加行（走 preference 级点击监听，见 attach）：也闪一下行末开关再加一组，两种点法反馈一致 */
+    /** 点添加行（走 Preference.performClick 钩子，见 install）：也闪一下行末开关再加一组，两种点法反馈一致 */
     private static void flashOrAdd(State state) {
         View view = state.addView == null ? null : state.addView.get();
         View found = view == null ? null : view.findViewById(android.R.id.checkbox);
@@ -921,28 +925,6 @@ final class ThenExecutionHook {
             sCheckboxWidgetId = cached;
         }
         return cached;
-    }
-
-    private static int arrowId(Context context) {
-        int cached = sArrowId;
-        if (cached == 0) {
-            cached = context.getResources().getIdentifier(ARROW_ID, "id", context.getPackageName());
-            sArrowId = cached;
-        }
-        return cached;
-    }
-
-    /**
-     * 藏掉添加行行末的箭头。宿主绑定后段会按行是否带点击监听把可见性设回 VISIBLE，
-     * 所以除了 GONE 还压掉透明度：宿主从不改 alpha，设回可见也画不出来，不会闪一下。
-     */
-    private static void hideArrow(View view) {
-        int arrow = arrowId(view.getContext());
-        if (arrow == 0) return;
-        View icon = view.findViewById(arrow);
-        if (icon == null) return;
-        icon.setAlpha(0f);
-        if (icon.getVisibility() != View.GONE) icon.setVisibility(View.GONE);
     }
 
     private static void associate(Object target, String key, Object value) {
