@@ -126,12 +126,10 @@ final class ThenExecutionHook {
                     if (state == null || !state.ready || param.thisObject != state.add) return;
                     View view = itemView(param.args[0]);
                     if (view == null) return;
-                    // 行末原来那枚「›」让位给按钮；添加行独享一个视图类型，不必担心复用还原
-                    int arrow = arrowId(view.getContext());
-                    if (arrow != 0) {
-                        View icon = view.findViewById(arrow);
-                        if (icon != null && icon.getVisibility() != View.GONE) icon.setVisibility(View.GONE);
-                    }
+                    // 添加行不挂 preference 级点击监听：宿主按「有点击监听」显示行末箭头，
+                    // 行点击在 bindAddSwitch 里挂到 itemView；这里同步藏一次，下一帧再兜底一次
+                    hideArrow(view);
+                    view.post(() -> hideArrow(view));
                     bindAddSwitch(state, view);
                 }
             });
@@ -414,13 +412,7 @@ final class ThenExecutionHook {
                 "\u6dfb\u52a0\u518d\u6267\u884c");
         int switchWidget = checkboxWidgetId(activity);
         if (switchWidget != 0) XposedHelpers.callMethod(state.add, "setWidgetLayoutResource", switchWidget);
-        click(state.add, () -> safely(state, () -> {
-            GroupUi group = createGroup(state, support("newGroup"));
-            state.groups.add(group);
-            mount(state, group);
-            reorder(state);
-            updateCount(state);
-        }));
+        // 行点击不在 preference 上挂：宿主会给带点击监听的行显示行末「›」，改由 bindAddSwitch 挂到 itemView 上
 
         // The hidden storage item is removed only inside a rollback-capable UI transaction.
         List<Object> originalItems = new ArrayList<>(rawItems(results));
@@ -548,7 +540,8 @@ final class ThenExecutionHook {
         XposedHelpers.callMethod(group.delay, "setSummary", support("delaySummary", group.model));
     }
 
-    private static void confirmRemove(State state, GroupUi group) {
+    /** 删除整组：确认后移除；弹窗以任何方式收起且组还在时（取消 / 返回 / 点弹窗外）执行 onCancel */
+    private static void confirmRemove(State state, GroupUi group, Runnable onCancel) {
         Activity activity = state.activity.get();
         if (activity == null || activity.isFinishing()) return;
         Object builder = XposedHelpers.newInstance(
@@ -565,7 +558,14 @@ final class ThenExecutionHook {
         Class<?>[] signature = {int.class, DialogInterface.OnClickListener.class};
         XposedHelpers.callMethod(builder, "setPositiveButton", signature, android.R.string.ok, confirm);
         XposedHelpers.callMethod(builder, "setNegativeButton", signature, android.R.string.cancel, null);
-        XposedHelpers.callMethod(builder, "show");
+        Object dialogObject = XposedHelpers.callMethod(builder, "show");
+        if (onCancel != null) {
+            Class<?>[] dismissSignature = {DialogInterface.OnDismissListener.class};
+            XposedHelpers.callMethod(dialogObject, "setOnDismissListener", dismissSignature,
+                    (DialogInterface.OnDismissListener) dismissed -> {
+                        if (state.groups.contains(group)) onCancel.run();
+                    });
+        }
     }
 
     private static void openAdd(State state, GroupUi group) {
@@ -832,39 +832,45 @@ final class ThenExecutionHook {
         return null;
     }
 
-    /** 「添加再执行」行末开关：点一下加一组并在按钮上闪一下蓝色，然后自动回灰 */
+    /** 「添加再执行」行：点行末开关或点这一行其它位置都加一组，按钮闪一下蓝色再自动回灰 */
     private static void bindAddSwitch(State state, View view) {
         try {
             View found = view.findViewById(android.R.id.checkbox);
             if (!(found instanceof CompoundButton)) return;
             final CompoundButton button = (CompoundButton) found;
             if (XposedHelpers.getAdditionalInstanceField(view, FLASHING) == null) button.setChecked(false);
+            Runnable flash = () -> {
+                XposedHelpers.setAdditionalInstanceField(view, FLASHING, Boolean.TRUE);
+                button.setChecked(true);
+                safely(state, () -> {
+                    GroupUi group = createGroup(state, support("newGroup"));
+                    state.groups.add(group);
+                    mount(state, group);
+                    reorder(state);
+                    updateCount(state);
+                });
+                view.postDelayed(() -> {
+                    XposedHelpers.removeAdditionalInstanceField(view, FLASHING);
+                    button.setChecked(false);
+                }, FLASH_MS);
+            };
             XposedHelpers.callMethod(button, "setOnPerformCheckedChangeListener",
                     (CompoundButton.OnCheckedChangeListener) (source, checked) -> {
                         if (!checked) {
                             XposedHelpers.removeAdditionalInstanceField(view, FLASHING);
                             return;
                         }
-                        XposedHelpers.setAdditionalInstanceField(view, FLASHING, Boolean.TRUE);
-                        safely(state, () -> {
-                            GroupUi group = createGroup(state, support("newGroup"));
-                            state.groups.add(group);
-                            mount(state, group);
-                            reorder(state);
-                            updateCount(state);
-                        });
-                        view.postDelayed(() -> {
-                            XposedHelpers.removeAdditionalInstanceField(view, FLASHING);
-                            button.setChecked(false);
-                        }, FLASH_MS);
+                        flash.run();
                     });
+            // 行级点击取代 preference 级点击监听：宿主只给带点击监听的行显示行末的「›」
+            view.setOnClickListener(clicked -> flash.run());
         } catch (Throwable t) {
             XposedBridge.log(MainHook.TAG + ": delayed add switch unavailable");
             XposedBridge.log(t);
         }
     }
 
-    /** 「再执行」表头行末开关：这一组是否参与执行；长按标题行删除整组 */
+    /** 「再执行」表头行末开关：关闭时确认后删除整组（取消则弹回），长按标题行同样删除整组 */
     private static void bindGroupSwitch(State state, GroupUi group, View view) {
         try {
             View found = view.findViewById(android.R.id.checkbox);
@@ -872,12 +878,17 @@ final class ThenExecutionHook {
             final CompoundButton button = (CompoundButton) found;
             button.setChecked((Boolean) XposedHelpers.callMethod(group.model, "isEnabled"));
             XposedHelpers.callMethod(button, "setOnPerformCheckedChangeListener",
-                    (CompoundButton.OnCheckedChangeListener) (source, checked) -> safely(state, () -> {
+                    (CompoundButton.OnCheckedChangeListener) (source, checked) -> {
                         if (!state.groups.contains(group)) return;
-                        support("setGroupEnabled", group.model, checked);
-                    }));
+                        if (checked) {
+                            // 旧版本保存的停用分组可以重新打开；新配置里这个开关只用来删组
+                            safely(state, () -> support("setGroupEnabled", group.model, true));
+                            return;
+                        }
+                        safely(state, () -> confirmRemove(state, group, () -> button.setChecked(true)));
+                    });
             view.setOnLongClickListener(clicked -> {
-                safely(state, () -> confirmRemove(state, group));
+                safely(state, () -> confirmRemove(state, group, null));
                 return true;
             });
         } catch (Throwable t) {
@@ -902,6 +913,14 @@ final class ThenExecutionHook {
             sArrowId = cached;
         }
         return cached;
+    }
+
+    /** 藏掉行末的「›」箭头；宿主绑定流程后段会按行是否带点击监听把它设回可见，调用方要在绑定结束后再藏一次 */
+    private static void hideArrow(View view) {
+        int arrow = arrowId(view.getContext());
+        if (arrow == 0) return;
+        View icon = view.findViewById(arrow);
+        if (icon != null && icon.getVisibility() != View.GONE) icon.setVisibility(View.GONE);
     }
 
     private static void associate(Object target, String key, Object value) {
