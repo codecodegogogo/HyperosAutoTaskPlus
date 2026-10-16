@@ -13,6 +13,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -34,6 +35,7 @@ public final class ThenExecutionTest {
         invalidPlans();
         codec();
         editorDrafts();
+        enabledGroups();
         chainReferences();
         executionState();
         restartDisposition();
@@ -293,11 +295,69 @@ public final class ThenExecutionTest {
         check(actionsBefore.equals(GSON.toJson(group)), "failed action commit is atomic");
         ThenEditorSupport.setGroups(draft, Collections.singletonList(new ThenGroup()));
         check(!ThenEditorSupport.validationError(draft).isEmpty(), "a newly added empty group blocks task saving");
+        check(ThenEditorSupport.validationError(draft).contains("关闭本组开关"),
+                "the missing-actions hint points at the group switch");
+        ThenGroup muted = new ThenGroup();
+        ThenEditorSupport.setGroupEnabled(muted, false);
+        ThenEditorSupport.setGroups(draft, Collections.singletonList(muted));
+        check(draft.l() && ThenEditorSupport.validationError(draft).isEmpty(), "the group switch lets an unfinished group be saved");
+        check(!draft.getGroups().get(0).isEnabled(), "the saved draft keeps the group switched off");
         JsonObject unknown = GSON.toJsonTree(new ThenResultItem()).getAsJsonObject();
         unknown.addProperty("schemaVersion", 99);
         ThenResultItem bad = GSON.fromJson(unknown, ThenResultItem.class);
         check(!ThenEditorSupport.validationError(bad).isEmpty(), "unknown empty schemas are not treated as user-deleted groups");
         reject(() -> ThenEditorSupport.groups(bad), "unknown schemas cannot be silently extracted and discarded");
+    }
+
+    private static void enabledGroups() throws Exception {
+        ThenEditorSupport.configure(NativeFactory.class);
+
+        ThenGroup off = (ThenGroup) ThenEditorSupport.newGroup();
+        ThenEditorSupport.setActions(off, Collections.singletonList(new NativeResult(FIRST_KEY, "first", true)));
+        check(off.isEnabled(), "a new delayed group starts enabled");
+        ThenEditorSupport.setGroupEnabled(off, false);
+        check(!off.isEnabled() && off.isValid(), "a switched-off group stays valid and keeps its actions");
+
+        JsonObject legacy = GSON.toJsonTree(off).getAsJsonObject();
+        legacy.remove("enabled");
+        check(GSON.fromJson(legacy, ThenGroup.class).isEnabled(), "plans saved before the switch existed stay enabled");
+        check(!GSON.fromJson(GSON.toJson(off), ThenGroup.class).isEnabled(), "the switch survives Gson persistence");
+
+        ThenResultItem stored = (ThenResultItem) ThenEditorSupport.newPlan();
+        ThenEditorSupport.setGroups(stored, Collections.singletonList(off));
+        check(!stored.getGroups().get(0).isEnabled(), "the switch survives plan copies");
+        check(!serialized(stored).getGroups().get(0).isEnabled(), "the switch survives page transfers");
+        check(stored.l() && ThenEditorSupport.validationError(stored).isEmpty(),
+                "a plan whose only group is switched off can still be saved");
+        check(ThenRuntime.summary(stored).equals(ThenRuntime.title()
+                        + DeviceActionRuntime.text("：全部停用", ": all disabled")),
+                "an all-off plan announces that nothing will run");
+
+        ThenGroup on = (ThenGroup) ThenEditorSupport.newGroup();
+        ThenEditorSupport.setActions(on, Collections.singletonList(new NativeResult(SECOND_KEY, "second", true)));
+        ThenResultItem mixed = (ThenResultItem) ThenEditorSupport.newPlan();
+        ThenEditorSupport.setGroups(mixed, Arrays.asList(off, on));
+        check(mixed.l() && ThenEditorSupport.validationError(mixed).isEmpty(), "switched-off groups do not block a mixed plan");
+        check(ThenRuntime.summary(mixed).equals(ThenRuntime.title() + " 1"
+                        + DeviceActionRuntime.text(" 组", " groups")
+                        + DeviceActionRuntime.text("（其余停用）", " (others disabled)")),
+                "the summary counts only switched-on groups");
+
+        Method prepare = ThenRuntime.class.getDeclaredMethod("prepare", ThenResultItem.class, String.class);
+        prepare.setAccessible(true);
+        check(((List<?>) prepare.invoke(null, stored, "task-1")).isEmpty(),
+                "a plan whose groups are all switched off prepares no work");
+        check(((List<?>) prepare.invoke(null, mixed, "task-1")).size() == 1,
+                "only switched-on groups reach the alarm queue");
+
+        Method fingerprint = ThenRuntime.class.getDeclaredMethod("fingerprint", ThenResultItem.class);
+        fingerprint.setAccessible(true);
+        ThenResultItem flipped = (ThenResultItem) ThenEditorSupport.copyPlan(mixed);
+        List<ThenGroup> flippedGroups = ThenEditorSupport.groups(flipped);
+        flippedGroups.get(0).setEnabled(true);
+        ThenEditorSupport.setGroups(flipped, flippedGroups);
+        check(!fingerprint.invoke(null, mixed).equals(fingerprint.invoke(null, flipped)),
+                "turning a group on changes the execution fingerprint");
     }
 
     private static void chainReferences() {
@@ -509,6 +569,8 @@ public final class ThenExecutionTest {
         @Override public int i() { return 0; }
         @Override public void n() { throw new AssertionError("tests must never execute native actions"); }
         @Override public void o() { throw new AssertionError("tests must never restore native actions"); }
+        @Override public void s(String owner) { }
+        @Override public void p(boolean pending) { }
     }
 
     private static void reject(Runnable action, String message) {

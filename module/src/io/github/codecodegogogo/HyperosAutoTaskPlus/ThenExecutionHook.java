@@ -6,7 +6,7 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.View;
-import android.widget.ImageView;
+import android.widget.CompoundButton;
 import android.widget.Toast;
 
 import java.io.Serializable;
@@ -14,13 +14,11 @@ import java.lang.ref.WeakReference;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.WeakHashMap;
 
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedBridge;
@@ -35,23 +33,20 @@ final class ThenExecutionHook {
     private static final String RESTORE = PREFIX + "restore";
     private static final String SNAPSHOT = PREFIX + "draft";
     private static final String INIT_ERROR = PREFIX + "initializationError";
-    private static final String REMOVE_ROW = PREFIX + "removeRow";
+    private static final String FLASHING = PREFIX + "flashing";
     private static final String RUNTIME = "ThenEditorSupport";
     private static final String ADD_KEY = "key_result_list";
     private static final int REQUEST_ADD = 0x6A11;
     private static final int REQUEST_EDIT_APP = 0x6A12;
     private static final String SECTION_TITLE = "\u518d\u6267\u884c";
     private static final String ARROW_ID = "arrow_right";
-    private static final String ARROW_DRAWABLE = "miuix_appcompat_intent_arrow_right";
-    private static final String DELETE_ICON = "auto_task_icon_delete";
+    private static final String CHECKBOX_WIDGET = "miuix_preference_widget_checkbox";
     private static final String HEADER_CLASS = "com.miui.permcenter.settings.model.FlexiblePreference";
+    /** 「添加再执行」按钮变蓝后停留多久再回到灰色 */
+    private static final long FLASH_MS = 500L;
 
     private static volatile int sArrowId;
-    private static volatile int sArrowDrawableId;
-    private static volatile int sDeleteIconId;
-    /** 已经被换成 × 的行图标；宿主按下标复用行视图时要把这些还原回去 */
-    private static final Map<ImageView, Boolean> sPatchedIcons =
-            Collections.synchronizedMap(new WeakHashMap<>());
+    private static volatile int sCheckboxWidgetId;
 
     private ThenExecutionHook() {}
 
@@ -121,32 +116,39 @@ final class ThenExecutionHook {
             }
         });
 
-        HookUtils.step("再执行删除行图标", () -> {
+        HookUtils.step("再执行添加按钮", () -> {
             Class<?> textPreference = XposedHelpers.findClass("miuix.preference.TextPreference", cl);
             Method bind = findBindMethod(textPreference);
             if (bind == null) throw new IllegalStateException("TextPreference.onBindViewHolder 未找到");
             XposedBridge.hookMethod(bind, new XC_MethodHook() {
                 @Override protected void afterHookedMethod(MethodHookParam param) {
+                    State state = state(param.thisObject);
+                    if (state == null || !state.ready || param.thisObject != state.add) return;
                     View view = itemView(param.args[0]);
                     if (view == null) return;
-                    Context context = view.getContext();
-                    int arrow = arrowId(context);
-                    View target = arrow == 0 ? null : view.findViewById(arrow);
-                    if (!(target instanceof ImageView)) return;
-                    ImageView icon = (ImageView) target;
-                    if (XposedHelpers.getAdditionalInstanceField(param.thisObject, REMOVE_ROW) != null) {
-                        // 删除行的末尾还是宿主那个「›」的位置，换成任务列表里同一个 × 图标
-                        int delete = deleteIconId(context);
-                        if (delete == 0) return;
-                        icon.setImageResource(delete);
-                        sPatchedIcons.put(icon, Boolean.TRUE);
-                        return;
+                    // 行末原来那枚「›」让位给按钮；添加行独享一个视图类型，不必担心复用还原
+                    int arrow = arrowId(view.getContext());
+                    if (arrow != 0) {
+                        View icon = view.findViewById(arrow);
+                        if (icon != null && icon.getVisibility() != View.GONE) icon.setVisibility(View.GONE);
                     }
-                    // 同一个布局的行视图会被宿主复用，换过 × 的行要还原，否则别的配置项也会跟着显示 ×
-                    if (sPatchedIcons.remove(icon) != null) {
-                        int original = arrowDrawableId(context);
-                        if (original != 0) icon.setImageResource(original);
-                    }
+                    bindAddSwitch(state, view);
+                }
+            });
+        });
+
+        HookUtils.step("再执行表头开关", () -> {
+            Class<?> header = XposedHelpers.findClass(HEADER_CLASS, cl);
+            Method bind = findBindMethod(header);
+            if (bind == null) throw new IllegalStateException("FlexiblePreference.onBindViewHolder 未找到");
+            XposedBridge.hookMethod(bind, new XC_MethodHook() {
+                @Override protected void afterHookedMethod(MethodHookParam param) {
+                    State state = state(param.thisObject);
+                    GroupUi group = group(param.thisObject);
+                    if (state == null || !state.ready || group == null || !state.groups.contains(group)) return;
+                    View view = itemView(param.args[0]);
+                    if (view == null) return;
+                    bindGroupSwitch(state, group, view);
                 }
             });
         });
@@ -410,6 +412,8 @@ final class ThenExecutionHook {
         }
         state.add = newPreference(state, "miuix.preference.TextPreference", PREFIX + "add",
                 "\u6dfb\u52a0\u518d\u6267\u884c");
+        int switchWidget = checkboxWidgetId(activity);
+        if (switchWidget != 0) XposedHelpers.callMethod(state.add, "setWidgetLayoutResource", switchWidget);
         click(state.add, () -> safely(state, () -> {
             GroupUi group = createGroup(state, support("newGroup"));
             state.groups.add(group);
@@ -458,6 +462,10 @@ final class ThenExecutionHook {
         XposedHelpers.callMethod(group.header, "setTitle", SECTION_TITLE);
         XposedHelpers.callMethod(group.header, "setSelectable", false);
         XposedHelpers.callMethod(group.header, "setPersistent", false);
+        int switchWidget = checkboxWidgetId(state.activity.get());
+        if (switchWidget != 0) XposedHelpers.callMethod(group.header, "setWidgetLayoutResource", switchWidget);
+        associate(group.header, STATE, state);
+        associate(group.header, GROUP, group);
         // 卡片本身对应一个无标题的原生分类（原生 exit_category 就是分类里装 RecyclerViewPreference）。
         // 宿主的 PreferenceFragment 装饰只给分类的子项合并画一张卡片背景，所以标题交给上面的表头。
         group.section = XposedHelpers.newInstance(state.category, state.activity.get());
@@ -489,10 +497,6 @@ final class ThenExecutionHook {
         associate(group.results, STATE, state);
         associate(group.results, GROUP, group);
 
-        group.remove = newPreference(state, "miuix.preference.TextPreference", PREFIX + id + ".remove",
-                "\u5220\u9664");
-        XposedHelpers.setAdditionalInstanceField(group.remove, REMOVE_ROW, Boolean.TRUE);
-        click(group.remove, () -> safely(state, () -> confirmRemove(state, group)));
         int order = 0;
         for (Object child : group.children()) XposedHelpers.callMethod(child, "setOrder", order++);
         return group;
@@ -828,30 +832,74 @@ final class ThenExecutionHook {
         return null;
     }
 
+    /** 「添加再执行」行末开关：点一下加一组并在按钮上闪一下蓝色，然后自动回灰 */
+    private static void bindAddSwitch(State state, View view) {
+        try {
+            View found = view.findViewById(android.R.id.checkbox);
+            if (!(found instanceof CompoundButton)) return;
+            final CompoundButton button = (CompoundButton) found;
+            if (XposedHelpers.getAdditionalInstanceField(view, FLASHING) == null) button.setChecked(false);
+            XposedHelpers.callMethod(button, "setOnPerformCheckedChangeListener",
+                    (CompoundButton.OnCheckedChangeListener) (source, checked) -> {
+                        if (!checked) {
+                            XposedHelpers.removeAdditionalInstanceField(view, FLASHING);
+                            return;
+                        }
+                        XposedHelpers.setAdditionalInstanceField(view, FLASHING, Boolean.TRUE);
+                        safely(state, () -> {
+                            GroupUi group = createGroup(state, support("newGroup"));
+                            state.groups.add(group);
+                            mount(state, group);
+                            reorder(state);
+                            updateCount(state);
+                        });
+                        view.postDelayed(() -> {
+                            XposedHelpers.removeAdditionalInstanceField(view, FLASHING);
+                            button.setChecked(false);
+                        }, FLASH_MS);
+                    });
+        } catch (Throwable t) {
+            XposedBridge.log(MainHook.TAG + ": delayed add switch unavailable");
+            XposedBridge.log(t);
+        }
+    }
+
+    /** 「再执行」表头行末开关：这一组是否参与执行；长按标题行删除整组 */
+    private static void bindGroupSwitch(State state, GroupUi group, View view) {
+        try {
+            View found = view.findViewById(android.R.id.checkbox);
+            if (!(found instanceof CompoundButton)) return;
+            final CompoundButton button = (CompoundButton) found;
+            button.setChecked((Boolean) XposedHelpers.callMethod(group.model, "isEnabled"));
+            XposedHelpers.callMethod(button, "setOnPerformCheckedChangeListener",
+                    (CompoundButton.OnCheckedChangeListener) (source, checked) -> safely(state, () -> {
+                        if (!state.groups.contains(group)) return;
+                        support("setGroupEnabled", group.model, checked);
+                    }));
+            view.setOnLongClickListener(clicked -> {
+                safely(state, () -> confirmRemove(state, group));
+                return true;
+            });
+        } catch (Throwable t) {
+            XposedBridge.log(MainHook.TAG + ": delayed group switch unavailable");
+            XposedBridge.log(t);
+        }
+    }
+
+    private static int checkboxWidgetId(Context context) {
+        int cached = sCheckboxWidgetId;
+        if (cached == 0) {
+            cached = context.getResources().getIdentifier(CHECKBOX_WIDGET, "layout", context.getPackageName());
+            sCheckboxWidgetId = cached;
+        }
+        return cached;
+    }
+
     private static int arrowId(Context context) {
         int cached = sArrowId;
         if (cached == 0) {
             cached = context.getResources().getIdentifier(ARROW_ID, "id", context.getPackageName());
             sArrowId = cached;
-        }
-        return cached;
-    }
-
-    private static int deleteIconId(Context context) {
-        int cached = sDeleteIconId;
-        if (cached == 0) {
-            cached = context.getResources().getIdentifier(DELETE_ICON, "drawable", context.getPackageName());
-            sDeleteIconId = cached;
-        }
-        return cached;
-    }
-
-    /** 宿主自己那张「›」的矢量图，行视图被复用时用来还原 */
-    private static int arrowDrawableId(Context context) {
-        int cached = sArrowDrawableId;
-        if (cached == 0) {
-            cached = context.getResources().getIdentifier(ARROW_DRAWABLE, "drawable", context.getPackageName());
-            sArrowDrawableId = cached;
         }
         return cached;
     }
@@ -939,14 +987,13 @@ final class ThenExecutionHook {
         Object section;
         Object delay;
         Object results;
-        Object remove;
 
         GroupUi(Object model, String id) {
             this.model = model;
             this.id = id;
         }
 
-        /** 分类里的三个子项，顺序即界面顺序 */
-        Object[] children() { return new Object[]{delay, results, remove}; }
+        /** 分类里的两个子项，顺序即界面顺序 */
+        Object[] children() { return new Object[]{delay, results}; }
     }
 }
