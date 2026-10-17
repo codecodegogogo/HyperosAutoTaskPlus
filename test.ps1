@@ -37,3 +37,13 @@ if ($LASTEXITCODE -ne 0) { throw '解锁失败条件回归测试失败' }
 if ($LASTEXITCODE -ne 0) { throw '动作链回归测试失败' }
 & "$jdkPath\java.exe" -cp "$testPath;$testClasspath" io.github.codecodegogogo.HyperosAutoTaskPlus.inject.ThenExecutionTest
 if ($LASTEXITCODE -ne 0) { throw '再执行回归测试失败' }
+
+# UI 树测试使用独立的 Xposed 反射替身，不加入业务测试或 APK 的 classpath。
+$uiTestPath = Join-Path $testPath 'ui'
+New-Item -ItemType Directory -Path $uiTestPath -Force | Out-Null
+$uiClasspath = "$testClasspath;$projectRoot\build\libs\xposed-api-82.jar"
+$uiSources = Get-ChildItem -LiteralPath (Join-Path $projectRoot 'tests\ui') -Filter '*.java' | ForEach-Object FullName
+& "$jdkPath\javac.exe" --release 11 -encoding UTF-8 -cp $uiClasspath -d $uiTestPath $uiSources
+if ($LASTEXITCODE -ne 0) { throw '标题卡片测试编译失败' }
+& "$jdkPath\java.exe" -cp "$uiTestPath;$uiClasspath" io.github.codecodegogogo.HyperosAutoTaskPlus.TaskSectionCardTest
+if ($LASTEXITCODE -ne 0) { throw '标题卡片回归测试失败' }
