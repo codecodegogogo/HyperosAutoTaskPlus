@@ -61,11 +61,15 @@ Invoke-Step "1/6 javac" {
 
 Invoke-Step "2/6 d8" {
     $classes = Get-ChildItem "$OUT\classes" -Recurse -Filter *.class | ForEach-Object FullName
+    # 类文件增多后会超过 Windows 命令行长度限制，使用 D8 参数文件。
+    $d8Inputs = Join-Path $OUT 'd8-inputs.txt'
+    [IO.File]::WriteAllLines($d8Inputs, [string[]]$classes, [Text.UTF8Encoding]::new($false))
     & "$JDK\java.exe" -cp $JADX_JAR com.android.tools.r8.D8 `
         --release --min-api 29 `
         --lib $ANDROID_JAR `
         --output "$OUT\dex" `
-        $classes
+        "@$d8Inputs"
+    if ($LASTEXITCODE -ne 0) { throw 'D8 编译失败' }
     Get-Item "$OUT\dex\classes.dex" | Select-Object Name, Length | Out-Host
 }
 

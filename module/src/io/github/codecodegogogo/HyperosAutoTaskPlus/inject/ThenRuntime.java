@@ -430,17 +430,11 @@ public final class ThenRuntime {
 
     private static boolean expectsRestore(Object bean) throws Exception {
         if (bean == null) throw new IllegalStateException("自动任务已不存在");
-        return (Boolean) call(bean, "p") || hasTimeRange(bean);
+        return (Boolean) call(bean, "p") || TimeExitRuntime.hasImplicitTimeExit((List<?>) call(bean, "b"));
     }
 
     private static boolean hasTimeRange(Object bean) throws Exception {
-        for (Object item : (List<?>) call(bean, "b")) {
-            if (item != null && "com.miui.autotask.taskitem.CustomTimeConditionItem".equals(item.getClass().getName())) {
-                Field type = findField(item.getClass(), "timeType", int.class);
-                if (type.getInt(item) == 2) return true;
-            }
-        }
-        return false;
+        return TimeExitRuntime.hasTimeRange((List<?>) call(bean, "b"));
     }
 
     private static void requireReady(String uuid) {

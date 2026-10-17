@@ -5,6 +5,7 @@ import android.content.Intent;
 import android.view.View;
 import android.widget.CheckBox;
 import android.widget.ImageView;
+import android.widget.Toast;
 
 import java.io.Serializable;
 import java.lang.reflect.Method;
@@ -36,7 +37,7 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
  *   列表适配器.o/m(holder,int)              「添加」行不显示勾选框和删除；只剩一条退出条件时不显示勾选框
  *
  * 退出条件之间是「或」：勾选的任一条件满足即退出（原生文案「满足以下选中的任一条件则自动退出任务」）。
- * 「自定义时间」作为退出条件引擎不会设闹钟，添加页里把它禁掉。
+ * 时间段的结束退出由 TimeExitConditionHook 自动生成；不允许添加独立的时间触发条件。
  */
 final class ExitConditionHook {
 
@@ -186,6 +187,13 @@ final class ExitConditionHook {
                 }
                 Object item = items.get(position);
                 String key = (String) XposedHelpers.callMethod(item, "e");
+                if (FirstAppKeys.KEY_TIME_PERIOD_EXIT.equals(key)) {
+                    param.setResult(null);
+                    Activity activity = (Activity) XposedHelpers.getObjectField(self, "a");
+                    if (activity != null) Toast.makeText(activity,
+                            "结束时间跟随上方自定义时间段；可取消勾选或删除这条退出条件", Toast.LENGTH_LONG).show();
+                    return;
+                }
                 if (KEY_ADD_CONDITION_ROW.equals(key)) {
                     // 「添加」行：打开添加条件页，已在退出列表里的和「自定义时间」置灰
                     param.setResult(null);

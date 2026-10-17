@@ -51,6 +51,8 @@ public final class FirstAppKeys {
     public static final String KEY_INTERVAL_CONDITION = "key_interval_condition_item";
     /** 原生「自定义时间」条件，时间间隔紧跟在它之后 */
     public static final String KEY_CUSTOM_TIME_CONDITION = "key_custom_time_condition_item";
+    /** 自定义时间段的结束事件，仅用于退出列表。 */
+    public static final String KEY_TIME_PERIOD_EXIT = "key_time_period_exit_condition_item";
 
     /** 到达 / 离开地理围栏：原生「到达 / 离开某地」加可自定义的半径 */
     public static final String KEY_GEOFENCE_ENTER_CONDITION = "key_geofence_enter_condition_item";

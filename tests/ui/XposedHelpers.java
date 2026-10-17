@@ -17,7 +17,13 @@ public final class XposedHelpers {
             case "com.miui.autotask.view.RecyclerViewPreference": type = "Content"; break;
             case "androidx.preference.PreferenceCategory": type = "Group"; break;
             case "com.miui.permcenter.settings.model.FlexiblePreference": type = "Header"; break;
-            default: return Object.class;
+            case "com.miui.autotask.bean.r":
+                try {
+                    return Class.forName("io.github.codecodegogogo.HyperosAutoTaskPlus.TimeExitEngineTest$Bean");
+                } catch (ClassNotFoundException e) { throw new AssertionError(e); }
+            default:
+                try { return Class.forName(name, true, loader); }
+                catch (ClassNotFoundException e) { return Object.class; }
         }
         try {
             return Class.forName("io.github.codecodegogogo.HyperosAutoTaskPlus.TaskSectionCardTest$" + type);
@@ -38,8 +44,28 @@ public final class XposedHelpers {
     }
 
     public static Object callMethod(Object receiver, String name, Object... args) {
+        return invoke(receiver.getClass(), receiver, name, args);
+    }
+
+    public static Object callStaticMethod(Class<?> type, String name, Object... args) {
+        return invoke(type, null, name, args);
+    }
+
+    public static Object getObjectField(Object receiver, String name) {
+        for (Class<?> type = receiver.getClass(); type != null; type = type.getSuperclass()) {
+            try {
+                java.lang.reflect.Field field = type.getDeclaredField(name);
+                field.setAccessible(true);
+                return field.get(receiver);
+            } catch (NoSuchFieldException ignored) {
+            } catch (IllegalAccessException e) { throw new AssertionError(e); }
+        }
+        throw new IllegalStateException(name);
+    }
+
+    private static Object invoke(Class<?> type, Object receiver, String name, Object... args) {
         try {
-            for (Method method : receiver.getClass().getMethods()) {
+            for (Method method : type.getMethods()) {
                 if (method.getName().equals(name) && matches(method.getParameterTypes(), args)) {
                     return method.invoke(receiver, args);
                 }
