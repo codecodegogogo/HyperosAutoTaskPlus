@@ -47,3 +47,15 @@ $uiSources = Get-ChildItem -LiteralPath (Join-Path $projectRoot 'tests\ui') -Fil
 if ($LASTEXITCODE -ne 0) { throw '标题卡片测试编译失败' }
 & "$jdkPath\java.exe" -cp "$uiTestPath;$uiClasspath" io.github.codecodegogogo.HyperosAutoTaskPlus.TaskSectionCardTest
 if ($LASTEXITCODE -ne 0) { throw '标题卡片回归测试失败' }
+
+# 时间条件测试隔离宿主 TaskItem / CustomTimeConditionItem，验证真实策略代码及序列化。
+$timeTestPath = Join-Path $testPath 'time'
+New-Item -ItemType Directory -Path $timeTestPath -Force | Out-Null
+$timeSources = @(Get-ChildItem -LiteralPath (Join-Path $projectRoot 'tests\time') -Filter '*.java' | ForEach-Object FullName)
+$timeSources += Join-Path $projectRoot 'tests\ui\XposedHelpers.java'
+& "$jdkPath\javac.exe" --release 11 -encoding UTF-8 -cp $uiClasspath -d $timeTestPath $timeSources
+if ($LASTEXITCODE -ne 0) { throw '时间退出测试编译失败' }
+& "$jdkPath\java.exe" -cp "$timeTestPath;$testClasspath" io.github.codecodegogogo.HyperosAutoTaskPlus.inject.TimeExitTest
+if ($LASTEXITCODE -ne 0) { throw '时间退出回归测试失败' }
+& "$jdkPath\java.exe" -cp "$timeTestPath;$uiClasspath" io.github.codecodegogogo.HyperosAutoTaskPlus.TimeExitEngineTest
+if ($LASTEXITCODE -ne 0) { throw '时间退出引擎回归测试失败' }

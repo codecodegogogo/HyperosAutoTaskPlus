@@ -23,6 +23,7 @@ public final class TaskSectionCardTest {
         nativeCardsAndDelayedGroups();
         rollbackAfterPartialMount();
         unrelatedHeadersStayUnchanged();
+        addMenuAlwaysFollowsContent();
         System.out.println("Task section card checks passed: " + checks);
     }
 
@@ -35,7 +36,7 @@ public final class TaskSectionCardTest {
         check(cardEnabled(f.conditionHeader) && cardEnabled(f.resultHeader), "native headers enable card drawing");
         check(f.conditionHeader.parent != f.resultHeader.parent, "native sections remain separate cards");
         check(f.screen.children.equals(Arrays.asList(f.title, f.conditionHeader.parent,
-                f.resultHeader.parent, f.add, f.exit, f.spacer)), "native screen order is preserved");
+                f.resultHeader.parent, f.exit, f.add, f.spacer)), "add menu follows the native content and settings");
         check(f.results.parent.children.get(1) == f.results, "native result instance is retained");
         check(!cardEnabled(f.spacer), "blank FlexiblePreference spacer is not a card");
 
@@ -56,7 +57,8 @@ public final class TaskSectionCardTest {
         }
         check(f.screen.children.indexOf(field(first, "section")) == 3
                 && f.screen.children.indexOf(field(second, "section")) == 4
-                && f.screen.children.indexOf(f.add) == 5, "delayed cards follow native results and precede add");
+                && f.screen.children.indexOf(f.exit) == 5
+                && f.screen.children.indexOf(f.add) == 6, "delayed cards and exit settings precede add");
         groups.remove(first);
         call("detach", new Class<?>[]{STATE, GROUP_UI}, f.state, first);
         call("reorder", new Class<?>[]{STATE}, f.state);
@@ -99,6 +101,65 @@ public final class TaskSectionCardTest {
         check(!cardEnabled(unrelatedHeader), "unrelated headers do not inherit card styling");
         check(unrelatedHeader.parent == f.screen && unrelatedContent.parent == f.screen,
                 "only condition and result pairs are regrouped");
+    }
+
+    private static void addMenuAlwaysFollowsContent() throws Exception {
+        for (boolean exitFirst : new boolean[]{false, true}) {
+            Fixture f = new Fixture();
+            Content exitContent = new Content("key_exit_condition_list");
+            exitContent.visible = exitFirst;
+            f.exit.addPreference(new Preference());
+            f.exit.addPreference(exitContent);
+            Group notifications = new Group(null);
+            notifications.addPreference(new Preference());
+            f.screen.addPreference(notifications);
+            List<Object> originals = list(f.state, "originalPreferences");
+            originals.add(originals.size() - 1, notifications);
+            call("mountNativeSections", new Class<?>[]{STATE}, f.state);
+            call("reorder", new Class<?>[]{STATE}, f.state);
+            checkAddAtBottom(f, notifications);
+
+            List<Object> groups = list(f.state, "groups");
+            for (int i = 0; i < 3; i++) {
+                Object group = delayedGroup("group-" + i);
+                groups.add(group);
+                call("mount", new Class<?>[]{STATE, GROUP_UI}, f.state, group);
+                call("reorder", new Class<?>[]{STATE}, f.state);
+                checkAddAtBottom(f, notifications);
+                check(f.screen.children.indexOf(field(group, "section")) < f.screen.children.indexOf(f.exit),
+                        "created delayed content remains above the exit-settings menu");
+                check(((Group) field(group, "section")).children.size() == 3,
+                        "adding yields one populated delayed section, not another add menu");
+            }
+            // Visibility changes must keep menus below content even without another reorder call.
+            for (boolean visible : new boolean[]{true, false, true}) {
+                exitContent.visible = visible;
+                checkAddAtBottom(f, notifications);
+                check(exitContent.parent == f.exit, "exit content remains attached to its settings section");
+            }
+            for (int index : new int[]{1, 1, 0}) {
+                Object removed = groups.remove(index);
+                call("detach", new Class<?>[]{STATE, GROUP_UI}, f.state, removed);
+                call("reorder", new Class<?>[]{STATE}, f.state);
+                checkAddAtBottom(f, notifications);
+            }
+            Object readded = delayedGroup("readded");
+            groups.add(readded);
+            call("mount", new Class<?>[]{STATE, GROUP_UI}, f.state, readded);
+            call("reorder", new Class<?>[]{STATE}, f.state);
+            checkAddAtBottom(f, notifications);
+            call("reorder", new Class<?>[]{STATE}, f.state);
+            checkAddAtBottom(f, notifications);
+        }
+    }
+
+    private static void checkAddAtBottom(Fixture f, Group notifications) {
+        int add = f.screen.children.indexOf(f.add);
+        check(add == f.screen.children.size() - 2, "add menu is last except for the native footer spacer");
+        check(f.screen.children.indexOf(f.exit) < add && f.screen.children.indexOf(notifications) < add,
+                "exit content and notification settings both precede add");
+        check(f.screen.children.get(add + 1) == f.spacer, "native bottom spacing remains after the menu");
+        check(java.util.Collections.frequency(f.screen.children, f.add) == 1, "only one add menu exists");
     }
 
     private static Object delayedGroup(String id) throws Exception {
@@ -193,6 +254,8 @@ public final class TaskSectionCardTest {
         Group parent;
         int order = Integer.MAX_VALUE;
         String key;
+        boolean visible = true;
+        public CharSequence getTitle() { return null; }
         public Group getParent() { return parent; }
         public String getKey() { return key; }
         public void setKey(String value) { key = value; }

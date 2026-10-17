@@ -71,6 +71,8 @@ public class MainHook implements IXposedHookLoadPackage {
             XposedBridge.log(t);
         }
 
+        // Install first so editor reconciliation runs after the general exit-list hooks.
+        HookUtils.step("time period exit", () -> TimeExitConditionHook.install(lpparam));
         try {
             ExitConditionHook.install(lpparam);
         } catch (Throwable t) {

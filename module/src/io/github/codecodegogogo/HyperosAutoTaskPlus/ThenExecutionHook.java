@@ -586,8 +586,13 @@ final class ThenExecutionHook {
     }
 
     private static void reorder(State state) {
+        int footerStart = state.originalPreferences.size();
+        while (footerStart > 0 && isFooterSpacer(state, state.originalPreferences.get(footerStart - 1))) {
+            footerStart--;
+        }
         int order = 0;
-        for (Object original : state.originalPreferences) {
+        for (int i = 0; i < footerStart; i++) {
+            Object original = state.originalPreferences.get(i);
             NativeSection section = nativeSection(state, original);
             if (section == null) {
                 XposedHelpers.callMethod(original, "setOrder", order++);
@@ -598,8 +603,19 @@ final class ThenExecutionHook {
             for (GroupUi group : state.groups) {
                 XposedHelpers.callMethod(group.section, "setOrder", order++);
             }
-            XposedHelpers.callMethod(state.add, "setOrder", order++);
         }
+        // 已有分组、退出条件和原生设置都在上面；新增入口始终只有一条且位于底部。
+        XposedHelpers.callMethod(state.add, "setOrder", order++);
+        for (int i = footerStart; i < state.originalPreferences.size(); i++) {
+            XposedHelpers.callMethod(state.originalPreferences.get(i), "setOrder", order++);
+        }
+    }
+
+    private static boolean isFooterSpacer(State state, Object preference) {
+        if (!state.header.isInstance(preference)) return false;
+        Object title = XposedHelpers.callMethod(preference, "getTitle");
+        Object key = XposedHelpers.callMethod(preference, "getKey");
+        return (title == null || title.toString().isEmpty()) && (key == null || key.toString().isEmpty());
     }
 
     private static void refreshDelay(GroupUi group) {
