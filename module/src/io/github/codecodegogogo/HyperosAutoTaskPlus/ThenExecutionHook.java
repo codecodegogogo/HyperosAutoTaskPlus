@@ -34,6 +34,7 @@ final class ThenExecutionHook {
     private static final String SNAPSHOT = PREFIX + "draft";
     private static final String INIT_ERROR = PREFIX + "initializationError";
     private static final String FLASHING = PREFIX + "flashing";
+    private static final String CARD_HEADER = PREFIX + "cardHeader";
     private static final String RUNTIME = "ThenEditorSupport";
     private static final String ADD_KEY = "key_result_list";
     private static final int REQUEST_ADD = 0x6A11;
@@ -60,6 +61,14 @@ final class ThenExecutionHook {
         if (save == null || unchanged == null || refresh == null) {
             throw new IllegalStateException("NewTaskFragment delayed editor methods unavailable");
         }
+
+        XposedHelpers.findAndHookMethod(HEADER_CLASS, cl, "enabledCardStyle", new XC_MethodHook() {
+            @Override protected void afterHookedMethod(MethodHookParam param) {
+                if (Boolean.TRUE.equals(XposedHelpers.getAdditionalInstanceField(param.thisObject, CARD_HEADER))) {
+                    param.setResult(true);
+                }
+            }
+        });
 
         XposedHelpers.findAndHookMethod(preference, "v", String.class, new XC_MethodHook() {
             @Override protected void afterHookedMethod(MethodHookParam param) {
@@ -423,6 +432,7 @@ final class ThenExecutionHook {
         // The hidden storage item is removed only inside a rollback-capable UI transaction.
         List<Object> originalItems = new ArrayList<>(rawItems(results));
         try {
+            mountNativeSections(state);
             for (GroupUi group : state.groups) mount(state, group);
             XposedHelpers.callMethod(screen, "addPreference", state.add);
             rawItems(results).removeIf(item -> (Boolean) support("isPlan", item));
@@ -444,12 +454,60 @@ final class ThenExecutionHook {
             XposedHelpers.removeAdditionalInstanceField(results, STATE);
             for (GroupUi group : state.groups) detach(state, group);
             XposedHelpers.callMethod(screen, "removePreference", state.add);
+            restoreNativeSections(state);
             for (int i = 0; i < oldOrders.size(); i++) {
                 XposedHelpers.callMethod(state.originalPreferences.get(i), "setOrder", oldOrders.get(i));
             }
             notifyList(results);
             throw t;
         }
+    }
+
+    private static void mountNativeSections(State state) {
+        for (int i = 1; i < state.originalPreferences.size(); i++) {
+            Object content = state.originalPreferences.get(i);
+            Object header = state.originalPreferences.get(i - 1);
+            if (!state.header.isInstance(header) || !state.preference.isInstance(content)) continue;
+            String key = (String) XposedHelpers.callMethod(content, "getKey");
+            if (!"key_condition_list".equals(key) && content != state.results) continue;
+            Object category = XposedHelpers.newInstance(state.category, state.activity.get());
+            XposedHelpers.callMethod(category, "setKey", PREFIX + key + ".section");
+            XposedHelpers.callMethod(category, "setPersistent", false);
+            state.nativeSections.add(new NativeSection(header, content, category));
+
+            // 同一分类内由宿主统一绘制背景、边距和首尾圆角，不手工拼接颜色。
+            XposedHelpers.callMethod(state.screen, "addPreference", category);
+            XposedHelpers.callMethod(state.screen, "removePreference", header);
+            XposedHelpers.callMethod(state.screen, "removePreference", content);
+            XposedHelpers.callMethod(header, "setOrder", 0);
+            XposedHelpers.callMethod(content, "setOrder", 1);
+            XposedHelpers.setAdditionalInstanceField(header, CARD_HEADER, Boolean.TRUE);
+            XposedHelpers.callMethod(category, "addPreference", header);
+            XposedHelpers.callMethod(category, "addPreference", content);
+        }
+    }
+
+    private static void restoreNativeSections(State state) {
+        for (NativeSection section : state.nativeSections) {
+            for (Object child : new Object[]{section.header, section.content}) {
+                if (XposedHelpers.callMethod(child, "getParent") == section.category) {
+                    XposedHelpers.callMethod(section.category, "removePreference", child);
+                }
+                if (XposedHelpers.callMethod(child, "getParent") == null) {
+                    XposedHelpers.callMethod(state.screen, "addPreference", child);
+                }
+            }
+            XposedHelpers.callMethod(state.screen, "removePreference", section.category);
+            XposedHelpers.removeAdditionalInstanceField(section.header, CARD_HEADER);
+        }
+        state.nativeSections.clear();
+    }
+
+    private static NativeSection nativeSection(State state, Object preference) {
+        for (NativeSection section : state.nativeSections) {
+            if (section.header == preference || section.content == preference) return section;
+        }
+        return null;
     }
 
     private static GroupUi createGroup(State state, Object model) {
@@ -464,8 +522,8 @@ final class ThenExecutionHook {
         if (switchWidget != 0) XposedHelpers.callMethod(group.header, "setWidgetLayoutResource", switchWidget);
         associate(group.header, STATE, state);
         associate(group.header, GROUP, group);
-        // 卡片本身对应一个无标题的原生分类（原生 exit_category 就是分类里装 RecyclerViewPreference）。
-        // 宿主的 PreferenceFragment 装饰只给分类的子项合并画一张卡片背景，所以标题交给上面的表头。
+        XposedHelpers.setAdditionalInstanceField(group.header, CARD_HEADER, Boolean.TRUE);
+        // 标题、等待时间和执行列表放在同一无标题分类内，共用一张原生卡片。
         group.section = XposedHelpers.newInstance(state.category, state.activity.get());
         XposedHelpers.callMethod(group.section, "setKey", PREFIX + id + ".section");
         XposedHelpers.callMethod(group.section, "setPersistent", false);
@@ -509,13 +567,12 @@ final class ThenExecutionHook {
     }
 
     private static void mount(State state, GroupUi group) {
-        // 表头与分类先挂到已附加的 PreferenceScreen 上，子项再加进去才能拿到 PreferenceManager
-        XposedHelpers.callMethod(state.screen, "addPreference", group.header);
+        // 分类先附加到 PreferenceScreen，子项再加入才能拿到 PreferenceManager。
         XposedHelpers.callMethod(state.screen, "addPreference", group.section);
         for (Object child : group.children()) XposedHelpers.callMethod(group.section, "addPreference", child);
     }
 
-    /** 先摘子项再摘分类和表头，避免宿主分类移除时不清理子项状态 */
+    /** 先摘子项再摘分类，避免宿主分类移除时不清理子项状态。 */
     private static void detach(State state, GroupUi group) {
         for (Object child : group.children()) {
             try {
@@ -526,16 +583,19 @@ final class ThenExecutionHook {
             }
         }
         XposedHelpers.callMethod(state.screen, "removePreference", group.section);
-        XposedHelpers.callMethod(state.screen, "removePreference", group.header);
     }
 
     private static void reorder(State state) {
         int order = 0;
         for (Object original : state.originalPreferences) {
-            XposedHelpers.callMethod(original, "setOrder", order++);
+            NativeSection section = nativeSection(state, original);
+            if (section == null) {
+                XposedHelpers.callMethod(original, "setOrder", order++);
+            } else if (original == section.header) {
+                XposedHelpers.callMethod(section.category, "setOrder", order++);
+            }
             if (original != state.results) continue;
             for (GroupUi group : state.groups) {
-                XposedHelpers.callMethod(group.header, "setOrder", order++);
                 XposedHelpers.callMethod(group.section, "setOrder", order++);
             }
             XposedHelpers.callMethod(state.add, "setOrder", order++);
@@ -975,6 +1035,7 @@ final class ThenExecutionHook {
         final Class<?> lunchApp;
         final Method refresh;
         final List<Object> originalPreferences = new ArrayList<>();
+        final List<NativeSection> nativeSections = new ArrayList<>();
         final List<GroupUi> groups = new ArrayList<>();
         Object add;
         WeakReference<View> addView;
@@ -1002,6 +1063,18 @@ final class ThenExecutionHook {
         }
     }
 
+    private static final class NativeSection {
+        final Object header;
+        final Object content;
+        final Object category;
+
+        NativeSection(Object header, Object content, Object category) {
+            this.header = header;
+            this.content = content;
+            this.category = category;
+        }
+    }
+
     private static final class GroupUi {
         final Object model;
         final String id;
@@ -1017,7 +1090,7 @@ final class ThenExecutionHook {
             this.id = id;
         }
 
-        /** 分类里的两个子项，顺序即界面顺序 */
-        Object[] children() { return new Object[]{delay, results}; }
+        /** 分类里的三个子项，顺序即界面顺序。 */
+        Object[] children() { return new Object[]{header, delay, results}; }
     }
 }
