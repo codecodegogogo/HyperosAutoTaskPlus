@@ -13,6 +13,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -57,10 +58,51 @@ final class CardPicker {
         void onPicked(int index, int amount, int unit);
     }
 
+    interface OnPickedAll {
+        void onPicked(int[] amounts, int[] units);
+    }
+
+    private interface OnConfirmed {
+        void onConfirmed(List<Card> cards);
+    }
+
     private CardPicker() {
     }
 
     static void show(Context context, String title, List<Spec> specs, int selected, final OnPicked onPicked) {
+        showInternal(context, title, specs, selected, new OnConfirmed() {
+            @Override
+            public void onConfirmed(List<Card> cards) {
+                for (int i = 0; i < cards.size(); i++) {
+                    Card card = cards.get(i);
+                    if (card.selected) {
+                        onPicked.onPicked(i, card.amount(), card.unit);
+                        return;
+                    }
+                }
+            }
+        });
+    }
+
+    /** 一次返回所有卡片里的数值和单位，卡片仍保持原生单选展开样式。 */
+    static void showAll(Context context, String title, List<Spec> specs, int selected,
+                        final OnPickedAll onPicked) {
+        showInternal(context, title, specs, selected, new OnConfirmed() {
+            @Override
+            public void onConfirmed(List<Card> cards) {
+                int[] amounts = new int[cards.size()];
+                int[] units = new int[cards.size()];
+                for (int i = 0; i < cards.size(); i++) {
+                    amounts[i] = cards.get(i).amount();
+                    units[i] = cards.get(i).unit;
+                }
+                onPicked.onPicked(amounts, units);
+            }
+        });
+    }
+
+    private static void showInternal(Context context, String title, List<Spec> specs, int selected,
+                                     final OnConfirmed onConfirmed) {
         if (context == null || specs == null || specs.isEmpty()) {
             return;
         }
@@ -95,13 +137,7 @@ final class CardPicker {
                 .setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
-                        for (int i = 0; i < cards.size(); i++) {
-                            Card c = cards.get(i);
-                            if (c.selected) {
-                                onPicked.onPicked(i, c.amount(), c.unit);
-                                return;
-                            }
-                        }
+                        onConfirmed.onConfirmed(cards);
                     }
                 })
                 .setNegativeButton(android.R.string.cancel, null)
@@ -201,7 +237,16 @@ final class CardPicker {
                     units[i] = chip;
                 }
                 styleUnits(c);
-                body.addView(chips, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+                LinearLayout.LayoutParams chipsParams = new LinearLayout.LayoutParams(
+                        0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+                if (spec.units.length > 4) {
+                    HorizontalScrollView scroller = new HorizontalScrollView(c);
+                    scroller.setHorizontalScrollBarEnabled(false);
+                    scroller.addView(chips);
+                    body.addView(scroller, chipsParams);
+                } else {
+                    body.addView(chips, chipsParams);
+                }
             }
             root.addView(body);
 

@@ -18,6 +18,9 @@ public final class FirstAppKeys {
     /** 首次离开应用：应用所有进程都被清出内存 */
     public static final String KEY_FIRST_LEAVE = "key_first_leave_activity_condition_item";
 
+    /** 应用使用时长：单次连续使用或跨会话累计使用达到指定时长 */
+    public static final String KEY_APP_USAGE_CONDITION = "key_app_usage_duration_condition_item";
+
     /** 隐身模式结果：开启/关闭权限中心的隐身模式（拒绝所有应用录音、定位和拍照） */
     public static final String KEY_INVISIBLE_MODE_RESULT = "key_invisible_mode_result_item";
     /** 原生「定位」结果，隐身模式紧跟在它之后 */
@@ -82,6 +85,10 @@ public final class FirstAppKeys {
 
     public static boolean isFirstAppKey(String key) {
         return KEY_FIRST_START.equals(key) || KEY_FIRST_LEAVE.equals(key);
+    }
+
+    public static boolean isAppUsageKey(String key) {
+        return KEY_APP_USAGE_CONDITION.equals(key);
     }
 
     public static boolean isInvisibleModeKey(String key) {
