@@ -88,6 +88,16 @@ public final class FirstAppRuntime {
         return item instanceof FirstAppConditionItem;
     }
 
+    /** 供其它条件复用进程存活状态：只要还有任一进程存活就返回 true。 */
+    public static boolean isPackageAlive(String pkg) {
+        if (TextUtils.isEmpty(pkg)) {
+            return false;
+        }
+        synchronized (LOCK) {
+            return PKG_ALIVE.containsKey(pkg);
+        }
+    }
+
     /**
      * 对应 g2.M0.t()：由一个条件生成它的退出条件（首次启动 <-> 首次离开），
      * 应用列表和 uuid 原样复制。
@@ -334,9 +344,11 @@ public final class FirstAppRuntime {
         }
         for (String pkg : started) {
             notifyEngine(pkg, true);
+            AppUsageRuntime.onPackageAlive(pkg, true);
         }
         for (String pkg : stopped) {
             notifyEngine(pkg, false);
+            AppUsageRuntime.onPackageAlive(pkg, false);
         }
     }
 

@@ -210,6 +210,7 @@ final class ExitConditionHook {
                     }
                     unable.add(KEY_CUSTOM_TIME_CONDITION);
                     unable.add(FirstAppKeys.KEY_INTERVAL_CONDITION);
+                    unable.add(FirstAppKeys.KEY_APP_USAGE_CONDITION);
                     if (openAdd == null) {
                         return;
                     }
