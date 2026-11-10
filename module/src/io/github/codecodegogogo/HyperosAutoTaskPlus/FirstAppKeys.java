@@ -36,6 +36,8 @@ public final class FirstAppKeys {
     public static final String KEY_EMAIL_RESULT = "key_email_result_item";
     public static final String KEY_PLAY_AUDIO_RESULT = "key_play_audio_result_item";
     public static final String KEY_NOTIFICATION_RESULT = "key_notification_result_item";
+    /** 执行命令：以 root 身份运行用户填写的 Shell 脚本。 */
+    public static final String KEY_SHELL_RESULT = "key_shell_result_item";
     /** 动作链结果：回放录制好的一串触摸动作，参数只存动作库里的 chainId 引用。 */
     public static final String KEY_ACTION_CHAIN_RESULT = "key_action_chain_result_item";
     /** 保存按顺序延迟执行的分组，不出现在普通的结果选择列表中。 */
@@ -99,7 +101,8 @@ public final class FirstAppKeys {
         return KEY_AUDIO_RECORD_RESULT.equals(key) || KEY_SCREEN_RECORD_RESULT.equals(key)
                 || KEY_SCREENSHOT_RESULT.equals(key) || KEY_PHOTO_RESULT.equals(key)
                 || KEY_CALL_RESULT.equals(key) || KEY_SMS_RESULT.equals(key) || KEY_EMAIL_RESULT.equals(key)
-                || KEY_PLAY_AUDIO_RESULT.equals(key) || KEY_NOTIFICATION_RESULT.equals(key);
+                || KEY_PLAY_AUDIO_RESULT.equals(key) || KEY_NOTIFICATION_RESULT.equals(key)
+                || KEY_SHELL_RESULT.equals(key);
     }
 
     public static boolean isActionChainKey(String key) {

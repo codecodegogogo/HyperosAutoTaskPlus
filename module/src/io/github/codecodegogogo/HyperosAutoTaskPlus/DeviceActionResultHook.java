@@ -24,7 +24,8 @@ final class DeviceActionResultHook {
             FirstAppKeys.KEY_AUDIO_RECORD_RESULT, FirstAppKeys.KEY_SCREEN_RECORD_RESULT,
             FirstAppKeys.KEY_SCREENSHOT_RESULT, FirstAppKeys.KEY_PHOTO_RESULT,
             FirstAppKeys.KEY_CALL_RESULT, FirstAppKeys.KEY_SMS_RESULT, FirstAppKeys.KEY_EMAIL_RESULT,
-            FirstAppKeys.KEY_PLAY_AUDIO_RESULT, FirstAppKeys.KEY_NOTIFICATION_RESULT};
+            FirstAppKeys.KEY_PLAY_AUDIO_RESULT, FirstAppKeys.KEY_NOTIFICATION_RESULT,
+            FirstAppKeys.KEY_SHELL_RESULT};
 
     private DeviceActionResultHook() {}
 

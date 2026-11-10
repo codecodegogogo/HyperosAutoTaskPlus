@@ -25,6 +25,8 @@ public class DeviceActionResultItem extends TaskItem {
     private String audioName = "";
     private String notificationText = "";
     private EmailConfig emailConfig;
+    /** 执行命令：交给 su 执行的完整脚本。 */
+    private String shellScript = "";
 
     /** Gson 使用无参构造；actionKey 从持久化字段恢复。 */
     public DeviceActionResultItem() {}
@@ -46,6 +48,7 @@ public class DeviceActionResultItem extends TaskItem {
         if (isEmail()) return emailConfig != null && emailConfig.isValid();
         if (isAudioPlayback()) return validAudioUri(audioUri);
         if (FirstAppKeys.KEY_NOTIFICATION_RESULT.equals(actionKey)) return validNotificationText(notificationText);
+        if (FirstAppKeys.KEY_SHELL_RESULT.equals(actionKey)) return validShellScript(shellScript);
         if (FirstAppKeys.KEY_PHOTO_RESULT.equals(actionKey)) return validCameraSelection(getCameraSelection());
         if (FirstAppKeys.KEY_CALL_RESULT.equals(actionKey)) return validNumber(phoneNumber);
         if (FirstAppKeys.KEY_SMS_RESULT.equals(actionKey)) {
@@ -121,6 +124,17 @@ public class DeviceActionResultItem extends TaskItem {
 
     public static boolean validNotificationText(String text) {
         return text != null && !text.trim().isEmpty();
+    }
+
+    public String getShellScript() { return shellScript == null ? "" : shellScript; }
+
+    public void setShellScript(String script) {
+        if (!validShellScript(script)) throw new IllegalArgumentException("请输入要执行的命令");
+        shellScript = script.trim();
+    }
+
+    public static boolean validShellScript(String script) {
+        return script != null && !script.trim().isEmpty() && script.length() <= 64 * 1024;
     }
 
     public void setAudioFile(String uri, String name) {

@@ -70,6 +70,7 @@ public final class DeviceActionTest {
         cameraSelections(gson);
         audioFiles(gson);
         notifications(gson);
+        shellCommand(gson);
         ownership();
         System.out.println("设备操作回归测试通过：" + checks + " 项断言");
     }
@@ -167,6 +168,21 @@ public final class DeviceActionTest {
         check(!malformed.l(), "未知摄像头配置不得执行");
         photo.setFrontCamera(false);
         check(photo.isRearCamera() && !photo.isFrontCamera(), "旧单选写入接口仍表示单选");
+    }
+
+    private static void shellCommand(Gson gson) {
+        DeviceActionResultItem shell = new DeviceActionResultItem(FirstAppKeys.KEY_SHELL_RESULT);
+        check(!shell.l(), "执行命令必须填写脚本");
+        String script = "am start -a android.intent.action.VIEW -d \"http://a:b@host:80\"";
+        shell.setShellScript("  " + script + "  ");
+        check(shell.l() && script.equals(shell.getShellScript()), "保存命令时去掉首尾空白");
+        DeviceActionResultItem restoredShell =
+                gson.fromJson(gson.toJson(shell), DeviceActionResultItem.class);
+        check(script.equals(restoredShell.getShellScript()), "Gson 保留命令");
+        check(!DeviceActionResultItem.validShellScript(" \n "), "拒绝空白命令");
+        check(!DeviceActionResultItem.validShellScript("x".repeat(64 * 1024 + 1)), "拒绝过长的命令");
+        check(!shell.restoresOnExit(), "命令只在触发时执行");
+        shell.o();
     }
 
     private static void assertConfig(DeviceActionResultItem item, String key) {
