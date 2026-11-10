@@ -20,14 +20,16 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.CheckBox;
 import android.widget.LinearLayout;
+import android.widget.RadioButton;
+import android.widget.RadioGroup;
 import android.widget.ScrollView;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import java.util.HashMap;
 import java.util.Map;
 
 import io.github.codecodegogogo.HyperosAutoTaskPlus.FirstAppKeys;
+import io.github.codecodegogogo.HyperosAutoTaskPlus.ToastGate;
 import miuix.appcompat.app.AlertDialog;
 
 /** 注入侧结果入口。编辑沿用 miuix；耗时设备操作放在专用线程，不能阻塞 auto_task。 */
@@ -35,6 +37,8 @@ public final class DeviceActionRuntime {
     static final String TAG = "HyperAutoEnh";
     private static final String PREFS_SHELL = "hyper_auto_shell";
     private static final String PREF_ROOT_NOTICE_DISMISSED = "root_notice_dismissed";
+    private static final int SHELL_IDENTITY_APP_ID = 0x48454d03;
+    private static final int SHELL_IDENTITY_ROOT_ID = 0x48454d04;
     /** 长按问号弹出的常用命令；只放只读或可恢复的操作，不放重启、清数据这类危险命令。 */
     private static final String[][] SHELL_HELP = {
             {"打开网址", "am start -f 0x10000000 -a android.intent.action.VIEW -d \"http://example.com\""},
@@ -150,17 +154,17 @@ public final class DeviceActionRuntime {
         });
     }
 
+    /** 打开命令编辑框；执行身份在编辑框里选择，只有选 root 时才显示授权说明。 */
+    private static void pickShell(Context context, DeviceActionResultItem item, Runnable confirm) {
+        editShell(context, item, confirm);
+    }
+
     /**
-     * 「执行命令」首次点击先说明需要 root 权限。按钮倒计时结束后才能点，
+     * root 说明只在用户第一次选择 root 身份并保存时出现。按钮倒计时结束后才能点，
      * 点击时主动发起 su 授权请求；「不再提示」放在左侧次要位置，点了以后不再显示说明。
      */
-    private static void pickShell(Context context, DeviceActionResultItem item, Runnable confirm) {
-        SharedPreferences preferences = context.getApplicationContext()
-                .getSharedPreferences(PREFS_SHELL, Context.MODE_PRIVATE);
-        if (preferences.getBoolean(PREF_ROOT_NOTICE_DISMISSED, false)) {
-            editShell(context, item, confirm);
-            return;
-        }
+    private static void showRootNotice(Context context, Runnable onAccept) {
+        SharedPreferences preferences = shellPreferences(context);
         AlertDialog dialog = new AlertDialog.Builder(context)
                 .setTitle(text("执行命令需要 root 权限", "Root permission required"))
                 .setMessage(text(
@@ -171,15 +175,19 @@ public final class DeviceActionRuntime {
                 .setPositiveButton(text("知道了", "Got it"), null)
                 .setNegativeButton(text("不再提示", "Don't show again"), (whichDialog, which) -> {
                     preferences.edit().putBoolean(PREF_ROOT_NOTICE_DISMISSED, true).apply();
-                    editShell(context, item, confirm);
+                    onAccept.run();
                 })
                 .show();
         Button positive = dialog.getButton(DialogInterface.BUTTON_POSITIVE);
         countdown(dialog, positive, 3, () -> {
             ShellRuntime.requestRoot(context);
-            editShell(context, item, confirm);
+            onAccept.run();
             dialog.dismiss();
         });
+    }
+
+    private static SharedPreferences shellPreferences(Context context) {
+        return context.getApplicationContext().getSharedPreferences(PREFS_SHELL, Context.MODE_PRIVATE);
     }
 
     /** 说明文字至少展示几秒，避免用户没看内容就点掉。 */
@@ -222,14 +230,43 @@ public final class DeviceActionRuntime {
         script.setText(item.getShellScript());
         column.addView(script, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        TextView identityLabel = new TextView(context);
+        identityLabel.setText(text("执行身份", "Run as"));
+        identityLabel.setTextSize(14);
+        identityLabel.setPadding(0, InjectUi.dp(context, 12), 0, InjectUi.dp(context, 4));
+        column.addView(identityLabel, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        final int[] identity = {item.getShellIdentity() == DeviceActionResultItem.SHELL_IDENTITY_APP
+                ? DeviceActionResultItem.SHELL_IDENTITY_APP
+                : DeviceActionResultItem.SHELL_IDENTITY_ROOT};
+        RadioGroup group = new RadioGroup(context);
+        group.setOrientation(LinearLayout.HORIZONTAL);
+        RadioButton app = InjectUi.checkOption(context, SHELL_IDENTITY_APP_ID, text("普通应用", "Normal app"));
+        RadioButton root = InjectUi.checkOption(context, SHELL_IDENTITY_ROOT_ID, text("root 身份", "Root"));
+        group.addView(app, new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        group.addView(root, new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        group.check(identity[0] == DeviceActionResultItem.SHELL_IDENTITY_APP
+                ? SHELL_IDENTITY_APP_ID : SHELL_IDENTITY_ROOT_ID);
+        column.addView(group, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
         TextView hint = new TextView(context);
-        hint.setText(text("命令以 root 身份执行。任务配置可以导出，请勿分享包含密码等敏感信息的命令。",
-                "Commands run as root. Task configurations can be exported; don't share commands "
-                        + "containing passwords or other secrets."));
         hint.setTextSize(12);
         hint.setPadding(0, InjectUi.dp(context, 12), 0, 0);
         column.addView(hint, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        updateShellHint(hint, identity[0]);
+        group.setOnCheckedChangeListener((whichGroup, checkedId) -> {
+            identity[0] = checkedId == SHELL_IDENTITY_APP_ID
+                    ? DeviceActionResultItem.SHELL_IDENTITY_APP
+                    : DeviceActionResultItem.SHELL_IDENTITY_ROOT;
+            updateShellHint(hint, identity[0]);
+        });
+
         ScrollView scroll = new ScrollView(context);
         scroll.addView(column);
         AlertDialog dialog = new AlertDialog.Builder(context).setTitle(item.h()).setView(scroll)
@@ -242,10 +279,31 @@ public final class DeviceActionRuntime {
                 script.requestFocus();
                 return;
             }
-            item.setShellScript(value);
-            if (confirm != null) confirm.run();
-            dialog.dismiss();
+            Runnable save = () -> {
+                item.setShellScript(value);
+                item.setShellIdentity(identity[0]);
+                if (confirm != null) confirm.run();
+                dialog.dismiss();
+            };
+            if (identity[0] == DeviceActionResultItem.SHELL_IDENTITY_ROOT
+                    && !shellPreferences(context).getBoolean(PREF_ROOT_NOTICE_DISMISSED, false)) {
+                showRootNotice(context, save);
+            } else {
+                save.run();
+            }
         });
+    }
+
+    private static void updateShellHint(TextView hint, int identity) {
+        hint.setText(identity == DeviceActionResultItem.SHELL_IDENTITY_APP
+                ? text("命令以安全服务自身的应用权限执行，不需要 root。"
+                                + "任务配置可以导出，请勿分享包含密码等敏感信息的命令。",
+                        "Commands run with the security service's own app permissions; root is not required. "
+                                + "Task configurations can be exported; don't share commands "
+                                + "containing passwords or other secrets.")
+                : text("命令以 root 身份执行。任务配置可以导出，请勿分享包含密码等敏感信息的命令。",
+                        "Commands run as root. Task configurations can be exported; don't share commands "
+                                + "containing passwords or other secrets."));
     }
 
     /** 标题行右侧的问号，长按打开常用命令帮助。 */
@@ -404,6 +462,7 @@ public final class DeviceActionRuntime {
         String audioName = item.getAudioName();
         String notificationText = item.getNotificationText();
         String shellScript = item.getShellScript();
+        boolean shellAsRoot = item.isShellRunAsRoot();
         worker().post(() -> {
             Context context = InjectUi.context();
             if (context == null) {
@@ -432,7 +491,7 @@ public final class DeviceActionRuntime {
                 } else if (FirstAppKeys.KEY_NOTIFICATION_RESULT.equals(key)) {
                     NotificationRuntime.send(context, owner, notificationText);
                 } else if (FirstAppKeys.KEY_SHELL_RESULT.equals(key)) {
-                    ShellRuntime.run(context, shellScript);
+                    ShellRuntime.run(context, shellScript, shellAsRoot);
                 }
             } catch (Throwable t) {
                 failure(context, title(key), t);
@@ -446,7 +505,7 @@ public final class DeviceActionRuntime {
     }
 
     static void notice(Context context, String message) {
-        new Handler(context.getMainLooper()).post(() -> Toast.makeText(context, message, Toast.LENGTH_LONG).show());
+        ToastGate.show(context, message);
     }
 
     static String text(String zh, String en) { return InjectUi.zh() ? zh : en; }

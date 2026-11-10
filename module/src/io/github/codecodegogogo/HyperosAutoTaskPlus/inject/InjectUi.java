@@ -2,6 +2,9 @@ package io.github.codecodegogogo.HyperosAutoTaskPlus.inject;
 
 import android.content.Context;
 import android.content.res.Resources;
+import android.content.res.TypedArray;
+import android.graphics.drawable.Drawable;
+import android.widget.RadioButton;
 
 import java.util.Locale;
 
@@ -64,6 +67,23 @@ final class InjectUi {
 
     static int dp(Context c, int v) {
         return (int) (v * c.getResources().getDisplayMetrics().density + 0.5f);
+    }
+
+    /** 和「发送短信」结果里的复选框一致：用宿主主题的 MIUI 勾选样式作为单选项。 */
+    static RadioButton checkOption(Context c, int id, CharSequence label) {
+        RadioButton option = new RadioButton(c);
+        option.setId(id);
+        option.setText(label);
+        TypedArray a = null;
+        try {
+            a = c.obtainStyledAttributes(new int[]{android.R.attr.listChoiceIndicatorMultiple});
+            Drawable drawable = a.getDrawable(0);
+            if (drawable != null) option.setButtonDrawable(drawable);
+        } catch (Throwable ignored) {
+        } finally {
+            if (a != null) a.recycle();
+        }
+        return option;
     }
 
     static boolean zh() {

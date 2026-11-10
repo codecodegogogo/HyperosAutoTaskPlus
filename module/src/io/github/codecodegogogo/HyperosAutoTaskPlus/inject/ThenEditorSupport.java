@@ -1,9 +1,10 @@
 package io.github.codecodegogogo.HyperosAutoTaskPlus.inject;
 
 import android.content.Context;
-import android.widget.Toast;
 
 import com.miui.autotask.taskitem.TaskItem;
+
+import io.github.codecodegogogo.HyperosAutoTaskPlus.ToastGate;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -112,7 +113,7 @@ public final class ThenEditorSupport {
                 try {
                     group.setDelay(amount, unit);
                 } catch (IllegalArgumentException e) {
-                    Toast.makeText(context, e.getMessage(), Toast.LENGTH_LONG).show();
+                    ToastGate.show(context, e.getMessage());
                     return;
                 }
                 if (confirm != null) confirm.run();

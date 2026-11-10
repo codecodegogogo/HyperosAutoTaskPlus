@@ -22,6 +22,8 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
  *  11. {@link ActionChainResultHook} 录制和回放触摸动作链。
  *  12. {@link ThenExecutionHook} 可添加多组按秒 / 分钟延迟的「再执行」。
  *  13. {@link AppUsageConditionHook} 应用在指定统计范围内的累计使用时长条件。
+ *  14. {@link CtaBypassHook} 拒绝联网后不再弹出隐私声明页。
+ *  15. {@link ToastSettingHook} 在自动任务设置页增加模块 Toast 开关。
  *
  * 目标版本：安全服务 12.3.5、12.3.2、12.8.6、13.5.9 与 13.6.0。混淆名（g2.M0、b2.j 等）随版本可能变化，
  * 各 hook 均按签名兜底并独立 try/catch，某一处失效不影响其余功能。
@@ -43,6 +45,9 @@ public class MainHook implements IXposedHookLoadPackage {
         }
 
         XposedBridge.log(TAG + ": load in " + lpparam.processName);
+
+        HookUtils.step("cta bypass", () -> CtaBypassHook.install(lpparam));
+        HookUtils.step("toast setting", () -> ToastSettingHook.install(lpparam));
 
         try {
             UnlockAppResultHook.install(lpparam);

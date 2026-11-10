@@ -3,9 +3,9 @@ package io.github.codecodegogogo.HyperosAutoTaskPlus.inject;
 import android.app.Notification;
 import android.app.NotificationManager;
 import android.content.Context;
-import android.os.Handler;
 import android.util.Log;
-import android.widget.Toast;
+
+import io.github.codecodegogogo.HyperosAutoTaskPlus.ToastGate;
 
 /**
  * 动作链回放期间的通知与提示。执行中显示持续通知（点按无停止按钮时按普通通知处理），
@@ -59,8 +59,7 @@ final class ActionChainNotice {
 
     static void toast(Context context, String message) {
         try {
-            new Handler(context.getMainLooper()).post(() ->
-                    Toast.makeText(context, message, Toast.LENGTH_LONG).show());
+            ToastGate.show(context, message);
         } catch (Throwable ignored) {}
     }
 }

@@ -8,9 +8,9 @@ import java.io.File;
 import java.io.InputStream;
 
 /**
- * 以 root 身份执行用户填写的 Shell 脚本。
+ * 执行用户填写的 Shell 脚本，可选择普通应用身份或 root 身份。
  *
- * 模块注入在安全服务进程里，本身只有普通应用权限；这里通过 root 管理器的 su 提权。
+ * 普通应用身份直接使用安全服务自身的权限执行，不需要 root；root 身份通过 root 管理器的 su 提权。
  * 添加和编辑时不探测、不索要授权，只有任务真正触发时才调用 su，未授权时由系统弹出请求。
  * 独立线程执行，避免超时等待阻塞其它设备操作。
  */
@@ -21,9 +21,9 @@ final class ShellRuntime {
 
     private ShellRuntime() {}
 
-    static void run(Context context, String script) {
+    static void run(Context context, String script, boolean asRoot) {
         final Context app = context.getApplicationContext();
-        Thread thread = new Thread(() -> execute(app, script), "hyper_auto_shell");
+        Thread thread = new Thread(() -> execute(app, script, asRoot), "hyper_auto_shell");
         thread.setDaemon(true);
         thread.start();
     }
@@ -72,10 +72,10 @@ final class ShellRuntime {
         thread.start();
     }
 
-    private static void execute(Context context, String script) {
+    private static void execute(Context context, String script, boolean asRoot) {
         Process process = null;
         try {
-            process = new ProcessBuilder(findSu(), "-c", script)
+            process = new ProcessBuilder(asRoot ? findSu() : findShell(), "-c", script)
                     .redirectErrorStream(true).start();
             ByteArrayOutputStream output = new ByteArrayOutputStream();
             final Process target = process;
@@ -164,5 +164,17 @@ final class ShellRuntime {
             }
         }
         return "su";
+    }
+
+    /** 普通应用身份直接调用系统 shell，不经过 su。 */
+    private static String findShell() {
+        String[] candidates = {"/system/bin/sh", "/system/xbin/sh", "/bin/sh"};
+        for (String path : candidates) {
+            try {
+                if (new File(path).canExecute()) return path;
+            } catch (Throwable ignored) {
+            }
+        }
+        return "sh";
     }
 }

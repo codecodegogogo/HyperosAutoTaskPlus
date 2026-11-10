@@ -5,7 +5,6 @@ import android.content.SharedPreferences;
 import android.os.SystemClock;
 import android.text.TextUtils;
 import android.util.Log;
-import android.widget.Toast;
 
 import com.miui.autotask.taskitem.TaskItem;
 
@@ -20,6 +19,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import io.github.codecodegogogo.HyperosAutoTaskPlus.FirstAppKeys;
+import io.github.codecodegogogo.HyperosAutoTaskPlus.ToastGate;
 
 /**
  * 「应用使用时长」的运行时。
@@ -584,9 +584,9 @@ public final class AppUsageRuntime {
                 }
                 if (AppUsageConditionItem.durationMillis(usageAmount, usageUnit)
                         > AppUsageConditionItem.durationMillis(rangeAmount, rangeUnit)) {
-                    Toast.makeText(context, InjectUi.zh()
+                    ToastGate.show(context, InjectUi.zh()
                             ? "使用时长不能超过统计范围"
-                            : "Usage time cannot exceed the range", Toast.LENGTH_LONG).show();
+                            : "Usage time cannot exceed the range");
                     return;
                 }
                 item.setRange(rangeAmount, rangeUnit);

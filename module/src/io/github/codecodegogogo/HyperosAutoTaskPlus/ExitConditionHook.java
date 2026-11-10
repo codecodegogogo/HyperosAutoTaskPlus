@@ -5,7 +5,6 @@ import android.content.Intent;
 import android.view.View;
 import android.widget.CheckBox;
 import android.widget.ImageView;
-import android.widget.Toast;
 
 import java.io.Serializable;
 import java.lang.reflect.Method;
@@ -190,8 +189,8 @@ final class ExitConditionHook {
                 if (FirstAppKeys.KEY_TIME_PERIOD_EXIT.equals(key)) {
                     param.setResult(null);
                     Activity activity = (Activity) XposedHelpers.getObjectField(self, "a");
-                    if (activity != null) Toast.makeText(activity,
-                            "结束时间跟随上方自定义时间段；可取消勾选或删除这条退出条件", Toast.LENGTH_LONG).show();
+                    if (activity != null) ToastGate.show(activity,
+                            "结束时间跟随上方自定义时间段；可取消勾选或删除这条退出条件");
                     return;
                 }
                 if (KEY_ADD_CONDITION_ROW.equals(key)) {

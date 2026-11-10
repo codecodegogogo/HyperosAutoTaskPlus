@@ -11,6 +11,10 @@ public class DeviceActionResultItem extends TaskItem {
     private static final long serialVersionUID = 1L;
     public static final int CAMERA_REAR = 1;
     public static final int CAMERA_FRONT = 2;
+    /** 执行命令的执行身份。旧配置没有该字段，按 root 兼容；新建命令默认普通应用。 */
+    public static final int SHELL_IDENTITY_LEGACY = 0;
+    public static final int SHELL_IDENTITY_ROOT = 1;
+    public static final int SHELL_IDENTITY_APP = 2;
 
     private String actionKey;
     private boolean startRecording = true;
@@ -25,8 +29,10 @@ public class DeviceActionResultItem extends TaskItem {
     private String audioName = "";
     private String notificationText = "";
     private EmailConfig emailConfig;
-    /** 执行命令：交给 su 执行的完整脚本。 */
+    /** 执行命令：交给 su 或普通应用 shell 执行的完整脚本。 */
     private String shellScript = "";
+    /** 执行命令：0 旧配置按 root，1 root，2 普通应用。 */
+    private int shellIdentity;
 
     /** Gson 使用无参构造；actionKey 从持久化字段恢复。 */
     public DeviceActionResultItem() {}
@@ -34,6 +40,8 @@ public class DeviceActionResultItem extends TaskItem {
     public DeviceActionResultItem(String key) {
         if (!FirstAppKeys.isDeviceActionKey(key)) throw new IllegalArgumentException("未知设备操作");
         actionKey = key;
+        // 新建的命令默认以安全服务自身的应用权限执行；旧任务没有该字段，仍按 root 兼容。
+        if (FirstAppKeys.KEY_SHELL_RESULT.equals(key)) shellIdentity = SHELL_IDENTITY_APP;
     }
 
     @Override public String e() { return actionKey; }
@@ -127,6 +135,18 @@ public class DeviceActionResultItem extends TaskItem {
     }
 
     public String getShellScript() { return shellScript == null ? "" : shellScript; }
+
+    public int getShellIdentity() { return shellIdentity; }
+
+    public void setShellIdentity(int identity) {
+        if (identity != SHELL_IDENTITY_ROOT && identity != SHELL_IDENTITY_APP) {
+            throw new IllegalArgumentException("未知执行身份");
+        }
+        shellIdentity = identity;
+    }
+
+    /** 0 是旧配置，保持原来的 root 行为；只有明确选择普通应用时才不使用 su。 */
+    public boolean isShellRunAsRoot() { return shellIdentity != SHELL_IDENTITY_APP; }
 
     public void setShellScript(String script) {
         if (!validShellScript(script)) throw new IllegalArgumentException("请输入要执行的命令");

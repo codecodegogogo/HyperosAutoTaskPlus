@@ -197,7 +197,7 @@ final class ThenExecutionHook {
                 Object initializationError = XposedHelpers.getAdditionalInstanceField(param.thisObject, INIT_ERROR);
                 if (initializationError != null) {
                     Context context = (Context) XposedHelpers.callMethod(param.thisObject, "getActivity");
-                    if (context != null) Toast.makeText(context, String.valueOf(initializationError), Toast.LENGTH_LONG).show();
+                    if (context != null) ToastGate.show(context, String.valueOf(initializationError));
                     param.setResult(null);
                     return;
                 }
@@ -246,8 +246,8 @@ final class ThenExecutionHook {
                             XposedBridge.log(t);
                             String error = recordInitializationFailure(param.thisObject, protect);
                             Context context = (Context) XposedHelpers.callMethod(param.thisObject, "getActivity");
-                            if (context != null) Toast.makeText(context, error,
-                                    protect ? Toast.LENGTH_LONG : Toast.LENGTH_SHORT).show();
+                            if (context != null) ToastGate.show(context, error,
+                                    protect ? Toast.LENGTH_LONG : Toast.LENGTH_SHORT);
                         }
                     }
                 });
@@ -1033,7 +1033,7 @@ final class ThenExecutionHook {
 
     private static void toast(State state, String text) {
         Context context = state.activity.get();
-        if (context != null) Toast.makeText(context, text, Toast.LENGTH_LONG).show();
+        if (context != null) ToastGate.show(context, text);
     }
 
     private static final class State {

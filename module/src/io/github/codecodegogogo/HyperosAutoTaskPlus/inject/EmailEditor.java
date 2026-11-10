@@ -63,12 +63,8 @@ public final class EmailEditor {
         label(context, column, "加密方式", 12);
         RadioGroup encryption = new RadioGroup(context);
         encryption.setOrientation(LinearLayout.VERTICAL);
-        RadioButton ssl = new RadioButton(context);
-        ssl.setId(SSL_ID);
-        ssl.setText("SSL/TLS（连接时加密，常用 465）");
-        RadioButton startTls = new RadioButton(context);
-        startTls.setId(START_TLS_ID);
-        startTls.setText("STARTTLS（升级为加密连接，常用 587）");
+        RadioButton ssl = InjectUi.checkOption(context, SSL_ID, "SSL/TLS（连接时加密，常用 465）");
+        RadioButton startTls = InjectUi.checkOption(context, START_TLS_ID, "STARTTLS（升级为加密连接，常用 587）");
         encryption.addView(ssl, fullWidth());
         encryption.addView(startTls, fullWidth());
         encryption.check(original.startTls ? START_TLS_ID : SSL_ID);

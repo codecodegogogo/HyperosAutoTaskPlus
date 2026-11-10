@@ -173,6 +173,8 @@ public final class DeviceActionTest {
     private static void shellCommand(Gson gson) {
         DeviceActionResultItem shell = new DeviceActionResultItem(FirstAppKeys.KEY_SHELL_RESULT);
         check(!shell.l(), "执行命令必须填写脚本");
+        check(shell.getShellIdentity() == DeviceActionResultItem.SHELL_IDENTITY_APP
+                && !shell.isShellRunAsRoot(), "新建命令默认以普通应用身份执行");
         String script = "am start -a android.intent.action.VIEW -d \"http://a:b@host:80\"";
         shell.setShellScript("  " + script + "  ");
         check(shell.l() && script.equals(shell.getShellScript()), "保存命令时去掉首尾空白");
@@ -182,6 +184,26 @@ public final class DeviceActionTest {
         check(!DeviceActionResultItem.validShellScript(" \n "), "拒绝空白命令");
         check(!DeviceActionResultItem.validShellScript("x".repeat(64 * 1024 + 1)), "拒绝过长的命令");
         check(!shell.restoresOnExit(), "命令只在触发时执行");
+
+        shell.setShellIdentity(DeviceActionResultItem.SHELL_IDENTITY_ROOT);
+        check(shell.isShellRunAsRoot(), "可以切换为 root 执行");
+        DeviceActionResultItem restoredRoot =
+                gson.fromJson(gson.toJson(shell), DeviceActionResultItem.class);
+        check(restoredRoot.getShellIdentity() == DeviceActionResultItem.SHELL_IDENTITY_ROOT
+                && restoredRoot.isShellRunAsRoot(), "Gson 保留执行身份");
+
+        String legacyJson = "{\"actionKey\":\"" + FirstAppKeys.KEY_SHELL_RESULT
+                + "\",\"shellScript\":\"id\"}";
+        DeviceActionResultItem legacy = gson.fromJson(legacyJson, DeviceActionResultItem.class);
+        check(legacy.getShellIdentity() == DeviceActionResultItem.SHELL_IDENTITY_LEGACY
+                && legacy.isShellRunAsRoot(), "缺少身份字段的旧任务仍按 root 执行");
+        check(new DeviceActionResultItem().isShellRunAsRoot(),
+                "无参构造的旧对象按 root 兼容");
+
+        boolean rejected = false;
+        try { shell.setShellIdentity(DeviceActionResultItem.SHELL_IDENTITY_LEGACY); }
+        catch (IllegalArgumentException expected) { rejected = true; }
+        check(rejected && shell.isShellRunAsRoot(), "拒绝未知执行身份且不覆盖原值");
         shell.o();
     }
 

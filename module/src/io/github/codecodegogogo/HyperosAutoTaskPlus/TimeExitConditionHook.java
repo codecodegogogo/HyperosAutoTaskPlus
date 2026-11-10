@@ -4,7 +4,6 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
-import android.widget.Toast;
 import java.util.List;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedBridge;
@@ -75,7 +74,7 @@ final class TimeExitConditionHook {
             XposedBridge.log(MainHook.TAG + ": time exit editor failed");
             XposedBridge.log(error);
             Context context = (Context) XposedHelpers.callMethod(fragment, "getActivity");
-            if (context != null) Toast.makeText(context, "时间退出条件加载失败，请重新打开任务", Toast.LENGTH_LONG).show();
+            if (context != null) ToastGate.show(context, "时间退出条件加载失败，请重新打开任务");
         }
     }
 }
