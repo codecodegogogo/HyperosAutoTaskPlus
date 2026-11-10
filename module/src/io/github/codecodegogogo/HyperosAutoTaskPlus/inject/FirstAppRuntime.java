@@ -54,6 +54,8 @@ public final class FirstAppRuntime {
     private static final ConcurrentHashMap<String, FirstAppConditionItem> ITEMS = new ConcurrentHashMap<>();
 
     private static volatile boolean sStarted;
+    /** bootstrapAlive 完成后为 true：此时 PKG_ALIVE 才可信 */
+    private static volatile boolean sTrackerReady;
     private static Context sContext;
     // ActivityManager 内部用 ArrayMap 持有 listener，这里再留一份强引用防止意外回收
     @SuppressWarnings("unused")
@@ -86,6 +88,11 @@ public final class FirstAppRuntime {
 
     public static boolean isFirstAppItem(Object item) {
         return item instanceof FirstAppConditionItem;
+    }
+
+    /** 进程存活状态是否已经可用；未就绪时 isPackageAlive 的 false 不代表进程不存在。 */
+    public static boolean isTrackerStarted() {
+        return sTrackerReady;
     }
 
     /** 供其它条件复用进程存活状态：只要还有任一进程存活就返回 true。 */
@@ -176,7 +183,10 @@ public final class FirstAppRuntime {
             EngineBridge.attach(engine);
             registerUidListener();
             bootstrapAlive();
+            sTrackerReady = true;
             Log.i(TAG, "process tracker started, alive pkgs=" + PKG_ALIVE.size());
+            // 应用使用时长可能先于本跟踪器启动，补做被推迟的持久化区间核对
+            AppUsageRuntime.onTrackerStarted();
         } catch (Throwable t) {
             Log.e(TAG, "start process tracker failed", t);
         }

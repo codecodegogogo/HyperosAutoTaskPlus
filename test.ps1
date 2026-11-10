@@ -35,6 +35,15 @@ if ($LASTEXITCODE -ne 0) { throw '邮件协议回归测试失败' }
 if ($LASTEXITCODE -ne 0) { throw '解锁失败条件回归测试失败' }
 & "$jdkPath\java.exe" -cp "$testPath;$testClasspath" io.github.codecodegogogo.HyperosAutoTaskPlus.inject.AppUsageConditionTest
 if ($LASTEXITCODE -ne 0) { throw '应用使用时长条件回归测试失败' }
+
+# 运行时测试需要可用的 android.util.Log / android.text.TextUtils，用替身覆盖 android.jar 的桩。
+$shadowPath = Join-Path $testPath 'shadows'
+New-Item -ItemType Directory -Path $shadowPath -Force | Out-Null
+$shadowSources = Get-ChildItem -LiteralPath (Join-Path $projectRoot 'tests\shadows') -Recurse -Filter '*.java' | ForEach-Object FullName
+& "$jdkPath\javac.exe" --release 11 -encoding UTF-8 -cp $testClasspath -d $shadowPath $shadowSources
+if ($LASTEXITCODE -ne 0) { throw '运行时测试替身编译失败' }
+& "$jdkPath\java.exe" -cp "$shadowPath;$testPath;$testClasspath" io.github.codecodegogogo.HyperosAutoTaskPlus.inject.AppUsageRuntimeTest
+if ($LASTEXITCODE -ne 0) { throw '应用使用时长运行时回归测试失败' }
 & "$jdkPath\java.exe" -cp "$testPath;$testClasspath" io.github.codecodegogogo.HyperosAutoTaskPlus.inject.ActionChainTest
 if ($LASTEXITCODE -ne 0) { throw '动作链回归测试失败' }
 & "$jdkPath\java.exe" -cp "$testPath;$testClasspath" io.github.codecodegogogo.HyperosAutoTaskPlus.inject.ThenExecutionTest

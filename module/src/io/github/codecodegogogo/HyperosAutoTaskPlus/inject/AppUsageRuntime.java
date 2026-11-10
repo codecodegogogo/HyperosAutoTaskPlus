@@ -27,11 +27,12 @@ import io.github.codecodegogogo.HyperosAutoTaskPlus.FirstAppKeys;
  * 统计模型：
  *   - 第一个时间是滚动统计范围，例如最近 1 天；
  *   - 第二个时间是该范围内累计使用时长，例如 30 分钟；
- *   - 应用第一次进入前台且进程存活后开始一段使用区间；
+ *   - 应用真正进入前台后才开始一段使用区间；进程只是存活、从未打开过不计时；
  *   - 进程进入后台不结束区间，只有进程被杀掉或强制停止才结束；
  *   - 多个所选应用的存活区间可以同时累计。
  *
  * 使用区间写入安全服务私有 SharedPreferences，进程重启后仍能按原统计范围计算。
+ * 区间同时记录墙钟和 elapsedRealtime：后者变小说明设备重启过，关机期间不计入使用时长。
  * 到点使用精确闹钟通知自动任务引擎。
  */
 public final class AppUsageRuntime {
@@ -39,6 +40,9 @@ public final class AppUsageRuntime {
     private static final String TAG = "HyperAutoEnh";
     private static final String PREFS = "hyper_auto_app_usage";
     private static final long DEFAULT_KEEP_MILLIS = 30L * 24L * 60L * 60_000L;
+    /** 2 起只记录真正打开过的区间；1 的旧区间把进程缓存时间也算进去了，升级时清空 */
+    private static final int PREFS_VERSION = 2;
+    private static final String VERSION_KEY = "version";
 
     private static final Object LOCK = new Object();
     private static final ConcurrentHashMap<String, AppUsageConditionItem> ITEMS = new ConcurrentHashMap<>();
@@ -46,13 +50,41 @@ public final class AppUsageRuntime {
     private static final Map<String, List<Slice>> HISTORY = new HashMap<>();
     private static final Map<String, Long> ACTIVE_SINCE = new HashMap<>();
     private static final Set<String> LOADED = new HashSet<>();
+    /** uuid -> 上一次判定是否已满足；条件持续满足时不重复通知引擎 */
+    private static final Map<String, Boolean> MET = new HashMap<>();
 
     private static volatile boolean sStarted;
     private static Context sContext;
-    private static SharedPreferences sPrefs;
+    private static volatile SharedPreferences sPrefs;
     private static String sForegroundPkg = "";
+    private static volatile Clock sClock = SystemClockSource.INSTANCE;
 
     private AppUsageRuntime() {
+    }
+
+    /** 时钟来源；JVM 回归测试替换成假时钟，正式运行始终用系统时间。 */
+    interface Clock {
+        long wallNow();
+
+        long elapsedNow();
+    }
+
+    private static final class SystemClockSource implements Clock {
+        static final SystemClockSource INSTANCE = new SystemClockSource();
+
+        @Override
+        public long wallNow() {
+            return System.currentTimeMillis();
+        }
+
+        @Override
+        public long elapsedNow() {
+            return SystemClock.elapsedRealtime();
+        }
+    }
+
+    static void setClockForTest(Clock clock) {
+        sClock = clock == null ? SystemClockSource.INSTANCE : clock;
     }
 
     // ------------------------------------------------------------------ 给 hook 侧用的入口
@@ -94,7 +126,8 @@ public final class AppUsageRuntime {
             ITEMS.put(uuid, usage);
             for (String pkg : usage.selectedPackages()) {
                 ensureLoadedLocked(pkg);
-                if (FirstAppRuntime.isPackageAlive(pkg)) {
+                // 只有应用当前就在前台才算「打开」；仅进程存活（被系统缓存）不计时
+                if (TextUtils.equals(sForegroundPkg, pkg) && FirstAppRuntime.isPackageAlive(pkg)) {
                     startActiveLocked(pkg, now);
                 }
             }
@@ -113,6 +146,7 @@ public final class AppUsageRuntime {
         }
         synchronized (LOCK) {
             ALARMS.cancel(uuid);
+            MET.remove(uuid);
         }
         Log.i(TAG, "unregister app usage uuid=" + uuid);
     }
@@ -134,11 +168,13 @@ public final class AppUsageRuntime {
             Map<String, TaskItem> hits = new HashMap<>();
             long now = now();
             synchronized (LOCK) {
+                ensurePrefsVersionLocked();
                 sForegroundPkg = currentForegroundPackage();
                 for (AppUsageConditionItem item : ITEMS.values()) {
                     for (String pkg : item.selectedPackages()) {
                         ensureLoadedLocked(pkg);
-                        if (FirstAppRuntime.isPackageAlive(pkg)) {
+                        // 重启模块时只有正在前台的应用能续上；后台缓存的进程等下次打开
+                        if (TextUtils.equals(sForegroundPkg, pkg) && FirstAppRuntime.isPackageAlive(pkg)) {
                             startActiveLocked(pkg, now);
                         }
                     }
@@ -150,6 +186,30 @@ public final class AppUsageRuntime {
         } catch (Throwable t) {
             Log.e(TAG, "start app usage tracker failed", t);
         }
+    }
+
+    /**
+     * FirstAppRuntime 的进程跟踪就绪后回调。
+     * 之前 isPackageAlive 还不可用时，持久化区间的核对会推迟，这里补做。
+     */
+    public static void onTrackerStarted() {
+        Map<String, TaskItem> hits = new HashMap<>();
+        long now = now();
+        synchronized (LOCK) {
+            if (!sStarted) {
+                return;
+            }
+            for (AppUsageConditionItem item : ITEMS.values()) {
+                for (String pkg : item.selectedPackages()) {
+                    ensureLoadedLocked(pkg);
+                    if (TextUtils.equals(sForegroundPkg, pkg) && FirstAppRuntime.isPackageAlive(pkg)) {
+                        startActiveLocked(pkg, now);
+                    }
+                }
+            }
+            scheduleAllLocked(now, hits);
+        }
+        notifyHits(hits, "app usage tracker ready");
     }
 
     /** 前台变化只用于确认“应用已打开”，进入后台后不会结束使用区间。 */
@@ -239,16 +299,17 @@ public final class AppUsageRuntime {
         }
         ACTIVE_SINCE.put(pkg, now);
         if (sPrefs != null) {
-            sPrefs.edit().putLong(activeKey(pkg), now).apply();
+            sPrefs.edit()
+                    .putLong(activeKey(pkg), now)
+                    .putLong(activeElapsedKey(pkg), elapsedNow())
+                    .apply();
         }
         return true;
     }
 
     private static boolean endActiveLocked(String pkg, long now) {
         Long start = ACTIVE_SINCE.remove(pkg);
-        if (sPrefs != null) {
-            sPrefs.edit().remove(activeKey(pkg)).apply();
-        }
+        clearActivePrefsLocked(pkg);
         if (start == null) {
             return false;
         }
@@ -258,6 +319,12 @@ public final class AppUsageRuntime {
             saveHistoryLocked(pkg, now);
         }
         return true;
+    }
+
+    private static void clearActivePrefsLocked(String pkg) {
+        if (sPrefs != null) {
+            sPrefs.edit().remove(activeKey(pkg)).remove(activeElapsedKey(pkg)).apply();
+        }
     }
 
     private static long totalUsageLocked(AppUsageConditionItem item, long now) {
@@ -307,11 +374,13 @@ public final class AppUsageRuntime {
         long total = totalUsageLocked(item, now);
         long target = item.usageMillis();
         if (total >= target) {
-            if (hits != null) {
+            // 只在“未满足 -> 满足”时通知一次；持续满足期间重新打开应用不重复执行任务
+            if (hits != null && markMetLocked(uuid, true)) {
                 hits.put(uuid, item);
             }
             return;
         }
+        markMetLocked(uuid, false);
 
         int activeCount = 0;
         for (String pkg : item.selectedPackages()) {
@@ -325,7 +394,7 @@ public final class AppUsageRuntime {
 
         long remaining = target - total;
         long delay = Math.max(1L, (remaining + activeCount - 1L) / activeCount);
-        ALARMS.set(uuid, SystemClock.elapsedRealtime() + delay, new Runnable() {
+        ALARMS.set(uuid, elapsedNow() + delay, new Runnable() {
             @Override
             public void run() {
                 onAlarm(uuid);
@@ -339,14 +408,16 @@ public final class AppUsageRuntime {
         synchronized (LOCK) {
             AppUsageConditionItem item = ITEMS.get(uuid);
             if (item != null) {
-                if (totalUsageLocked(item, now) >= item.usageMillis()) {
-                    hits.put(uuid, item);
-                } else {
-                    scheduleLocked(uuid, item, now, hits);
-                }
+                scheduleLocked(uuid, item, now, hits);
             }
         }
         notifyHits(hits, "app usage timer");
+    }
+
+    /** 返回 true 表示这次从未满足变成满足，需要通知引擎。 */
+    private static boolean markMetLocked(String uuid, boolean met) {
+        Boolean previous = MET.put(uuid, met);
+        return met && (previous == null || !previous);
     }
 
     private static void notifyHits(Map<String, TaskItem> hits, String reason) {
@@ -357,37 +428,84 @@ public final class AppUsageRuntime {
 
     // ------------------------------------------------------------------ 本地历史
 
-    private static void ensureLoadedLocked(String pkg) {
-        if (sPrefs == null || LOADED.contains(pkg)) {
+    /** 旧版本把进程缓存时间算进了使用时长，升级后一次性清空，避免残留区间继续误触发。 */
+    private static void ensurePrefsVersionLocked() {
+        if (sPrefs == null || sPrefs.getInt(VERSION_KEY, 0) >= PREFS_VERSION) {
             return;
         }
-        LOADED.add(pkg);
-        List<Slice> slices = historyLocked(pkg);
-        String value = sPrefs.getString(historyKey(pkg), "");
-        if (!TextUtils.isEmpty(value)) {
-            for (String pair : value.split(";")) {
-                int comma = pair.indexOf(',');
-                if (comma <= 0) {
-                    continue;
-                }
-                try {
-                    long start = Long.parseLong(pair.substring(0, comma));
-                    long end = Long.parseLong(pair.substring(comma + 1));
-                    if (end > start) {
-                        slices.add(new Slice(start, end));
+        sPrefs.edit().clear().putInt(VERSION_KEY, PREFS_VERSION).apply();
+        HISTORY.clear();
+        ACTIVE_SINCE.clear();
+        LOADED.clear();
+        MET.clear();
+        Log.i(TAG, "app usage prefs upgraded, stale intervals cleared");
+    }
+
+    private static void ensureLoadedLocked(String pkg) {
+        if (sPrefs == null) {
+            return;
+        }
+        ensurePrefsVersionLocked();
+        if (!LOADED.contains(pkg)) {
+            LOADED.add(pkg);
+            List<Slice> slices = historyLocked(pkg);
+            String value = sPrefs.getString(historyKey(pkg), "");
+            if (!TextUtils.isEmpty(value)) {
+                for (String pair : value.split(";")) {
+                    int comma = pair.indexOf(',');
+                    if (comma <= 0) {
+                        continue;
                     }
-                } catch (NumberFormatException ignored) {
-                    // 损坏的单条记录直接跳过
+                    try {
+                        long start = Long.parseLong(pair.substring(0, comma));
+                        long end = Long.parseLong(pair.substring(comma + 1));
+                        if (end > start) {
+                            slices.add(new Slice(start, end));
+                        }
+                    } catch (NumberFormatException ignored) {
+                        // 损坏的单条记录直接跳过
+                    }
                 }
             }
         }
+        // 进程跟踪还没就绪时 isPackageAlive 的 false 不可信，等 onTrackerStarted 再核对
+        if (FirstAppRuntime.isTrackerStarted()) {
+            reconcileActiveLocked(pkg);
+        }
+    }
+
+    /** 核对持久化的使用区间：只续上同一次开机内、进程仍存活的区间，其余按结束处理。 */
+    private static void reconcileActiveLocked(String pkg) {
+        if (ACTIVE_SINCE.containsKey(pkg)) {
+            return;
+        }
         long active = sPrefs.getLong(activeKey(pkg), 0L);
-        if (active > 0L) {
-            if (FirstAppRuntime.isPackageAlive(pkg)) {
-                ACTIVE_SINCE.put(pkg, active);
-            } else {
-                sPrefs.edit().remove(activeKey(pkg)).apply();
-            }
+        if (active <= 0L) {
+            return;
+        }
+        long activeElapsed = sPrefs.getLong(activeElapsedKey(pkg), 0L);
+        long nowWall = now();
+        long nowElapsed = elapsedNow();
+        if (activeElapsed <= 0L) {
+            // 旧版本没有 elapsed 记录，无法判断是否跨重启；直接丢弃，避免继续累计旧数据
+            clearActivePrefsLocked(pkg);
+            return;
+        }
+        if (activeElapsed > nowElapsed) {
+            // elapsedRealtime 变小说明设备重启过。上次关机时间未知，无法安全结算，
+            // 丢弃这段残留区间（宁可少算一次，也不把关机时间算成使用时长）。
+            clearActivePrefsLocked(pkg);
+            return;
+        }
+        if (active > nowWall) {
+            // 墙钟被回拨，这段区间无法解释，直接丢弃
+            clearActivePrefsLocked(pkg);
+            return;
+        }
+        if (FirstAppRuntime.isPackageAlive(pkg)) {
+            ACTIVE_SINCE.put(pkg, active);
+        } else {
+            clearActivePrefsLocked(pkg);
         }
     }
 
@@ -436,6 +554,10 @@ public final class AppUsageRuntime {
 
     private static String activeKey(String pkg) {
         return "active:" + pkg;
+    }
+
+    private static String activeElapsedKey(String pkg) {
+        return "active_elapsed:" + pkg;
     }
 
     // ------------------------------------------------------------------ 编辑对话框
@@ -519,7 +641,11 @@ public final class AppUsageRuntime {
     // ------------------------------------------------------------------ 系统接口
 
     private static long now() {
-        return System.currentTimeMillis();
+        return sClock.wallNow();
+    }
+
+    private static long elapsedNow() {
+        return sClock.elapsedNow();
     }
 
     private static String currentForegroundPackage() {
